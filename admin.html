@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FashionHub Admin</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .admin-shell { padding: 28px; }
+      .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      .admin-panel { background: #fff; padding: 16px; border-radius: 12px; }
+      .admin-panel h2 { margin-top:0 }
+      .list-row { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:8px 0; border-bottom:1px solid #eee }
+      .small { font-size:0.9rem; color:#666 }
+      .product-form { display:grid; gap:8px }
+      .product-form input, .product-form textarea { width:100%; padding:8px }
+      .admin-actions button{ margin-left:8px }
+      pre { white-space:pre-wrap }
+    </style>
+  </head>
+  <body>
+    <div class="container admin-shell">
+      <header class="topbar">
+        <div class="brand">LUNORA Admin</div>
+        <a href="index.html" class="link-more">Back to store</a>
+      </header>
+
+      <main class="admin-grid">
+        <section class="admin-panel" id="orders-panel">
+          <h2>Customer Orders</h2>
+          <div id="orders-list"></div>
+        </section>
+
+        <section class="admin-panel">
+          <h2>Products</h2>
+          <div id="products-list"></div>
+
+          <h3>Add / Edit Product</h3>
+          <form id="product-form" class="product-form">
+            <input name="id" placeholder="id (unique)" />
+            <input name="name" placeholder="Product name" />
+            <input name="price" placeholder="Price" />
+            <input name="oldPrice" placeholder="Old price (optional)" />
+            <input name="image" placeholder="Image URL" />
+            <textarea name="description" placeholder="Description"></textarea>
+            <div>
+              <button id="save-product" type="button" class="btn btn-primary">Save</button>
+              <button id="new-product" type="button" class="btn btn-light">New</button>
+            </div>
+          </form>
+        </section>
+      </main>
+
+    </div>
+
+    <script>
+      const ORDERS_KEY = 'fashionhub-orders';
+      const PRODUCTS_KEY = 'fashionhub-products';
+
+      const $ = (s, root=document) => root.querySelector(s);
+      const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
+
+      const load = (k) => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch(e){ return [] } };
+      const save = (k,v) => localStorage.setItem(k, JSON.stringify(v));
+
+      const ordersList = $('#orders-list');
+      const productsList = $('#products-list');
+      const form = $('#product-form');
+
+      function renderOrders(){
+        const orders = load(ORDERS_KEY).slice().reverse();
+        if (!orders.length) { ordersList.innerHTML = '<div class="small">No orders yet</div>'; return }
+        ordersList.innerHTML = '';
+        orders.forEach(o => {
+          const el = document.createElement('div'); el.className='list-row';
+          const left = document.createElement('div');
+          left.innerHTML = `<strong>${o.id}</strong><div class="small">${new Date(o.date).toLocaleString()} • ${o.customer.email}</div>`;
+          const right = document.createElement('div');
+          const view = document.createElement('button'); view.textContent='View'; view.className='btn btn-light';
+          view.onclick = () => { alert(JSON.stringify(o, null, 2)) };
+          const del = document.createElement('button'); del.textContent='Delete'; del.className='btn';
+          del.onclick = () => { if (!confirm('Delete order?')) return; const arr=load(ORDERS_KEY).filter(x=>x.id!==o.id); save(ORDERS_KEY,arr); renderOrders(); };
+          right.appendChild(view); right.appendChild(del);
+          el.appendChild(left); el.appendChild(right); ordersList.appendChild(el);
+        });
+      }
+
+      function renderProducts(){
+        const products = load(PRODUCTS_KEY);
+        // fallback: if empty, try to load from main page defaults via fetch? just show empty
+        productsList.innerHTML = '';
+        if (!products || !products.length) { productsList.innerHTML = '<div class="small">No products saved. Use the form to add.</div>'; return }
+        products.forEach(p => {
+          const el = document.createElement('div'); el.className='list-row';
+          const left = document.createElement('div'); left.innerHTML = `<strong>${p.name}</strong><div class="small">${p.id} • $${p.price}</div>`;
+          const right = document.createElement('div');
+          const edit = document.createElement('button'); edit.textContent='Edit'; edit.className='btn btn-light';
+          edit.onclick = () => { form.id.value = p.id; form.name.value = p.name; form.price.value = p.price; form.oldPrice.value = p.oldPrice||''; form.image.value = p.image||''; form.description.value = p.description||''; };
+          const del = document.createElement('button'); del.textContent='Delete'; del.className='btn';
+          del.onclick = () => { if (!confirm('Delete product?')) return; const arr=load(PRODUCTS_KEY).filter(x=>x.id!==p.id); save(PRODUCTS_KEY,arr); renderProducts(); };
+          right.appendChild(edit); right.appendChild(del);
+          el.appendChild(left); el.appendChild(right); productsList.appendChild(el);
+        });
+      }
+
+      $('#save-product').addEventListener('click', () => {
+        const id = form.id.value.trim(); if (!id) return alert('id required');
+        const prod = { id, name: form.name.value.trim(), price: Number(form.price.value)||0, oldPrice: Number(form.oldPrice.value)||0, image: form.image.value.trim(), description: form.description.value.trim() };
+        const arr = load(PRODUCTS_KEY).filter(p=>p.id!==id);
+        arr.push(prod);
+        save(PRODUCTS_KEY, arr);
+        renderProducts();
+        alert('Saved');
+      });
+
+      $('#new-product').addEventListener('click', () => { form.reset(); form.id.focus(); });
+
+      renderOrders(); renderProducts();
+    </script>
+  </body>
+</html>

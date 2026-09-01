@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FashionHub | Order Confirmed</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="container">
+        <header class="topbar">
+          <a class="brand" href="index.html">LUNORA</a>
+          <a href="shop.html" class="link-more">Continue shopping</a>
+        </header>
+
+        <main class="order-success">
+          <section class="success-panel">
+            <h1>Thank you — your order is confirmed</h1>
+            <p id="order-message">We have emailed your receipt and order details.</p>
+            <div class="order-details" id="order-details"></div>
+            <a class="btn btn-primary" href="index.html">Back to home</a>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const order = JSON.parse(sessionStorage.getItem('fashionhub-last-order') || 'null');
+        const details = document.getElementById('order-details');
+        const msg = document.getElementById('order-message');
+        if (!order) {
+          msg.textContent = 'No recent order found.';
+          details.innerHTML = '<p>Please check your email or return to the shop.</p>';
+          return;
+        }
+
+        msg.textContent = `Order ${order.id} placed on ${new Date(order.date).toLocaleString()}`;
+        if (!order.items || !order.items.length) {
+          details.innerHTML = '<p>Your order contains no items.</p>';
+          return;
+        }
+
+        details.innerHTML = `
+          <h3>Items</h3>
+          <ul class="order-list">
+            ${order.items.map(it => `<li><strong>${it.name}</strong> × ${it.quantity} — $${(it.price * it.quantity).toFixed(2)}</li>`).join('')}
+          </ul>
+          <h4>Total: $${order.items.reduce((s,it) => s + it.price * it.quantity, 0).toFixed(2)}</h4>
+          ${order.payment ? `<p>Paid with card ending in <strong>${order.payment.cardLast4}</strong></p>` : ''}
+        `;
+
+        // clear sessionStorage order after showing
+        // sessionStorage.removeItem('fashionhub-last-order');
+      });
+    </script>
+  </body>
+</html>
