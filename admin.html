@@ -22,7 +22,12 @@
     <div class="container admin-shell">
       <header class="topbar">
         <div class="brand">LUNORA Admin</div>
-        <a href="index.html" class="link-more">Back to store</a>
+        <div>
+          <a href="index.html" class="link-more">Back to store</a>
+          <button id="seed-data" class="btn btn-light">Seed demo data</button>
+          <button id="clear-data" class="btn">Clear data</button>
+          <button id="refresh-data" class="btn btn-light">Refresh</button>
+        </div>
       </header>
 
       <main class="admin-grid">
@@ -116,6 +121,42 @@
       $('#new-product').addEventListener('click', () => { form.reset(); form.id.focus(); });
 
       renderOrders(); renderProducts();
+
+      // Seed demo data for testing admin UI
+      const seedBtn = document.getElementById('seed-data');
+      const clearBtn = document.getElementById('clear-data');
+      if (seedBtn) seedBtn.addEventListener('click', () => {
+        const sampleProducts = [
+          { id: 'linen-blend-blazer', name: 'Linen Blend Blazer', price: 89.99, oldPrice:129.99, image: 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80', description: 'Tailored lightweight blazer' },
+          { id: 'ribbed-knit-top', name: 'Ribbed Knit Top', price: 25.99, oldPrice:49.0, image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80', description: 'Soft knit top' }
+        ];
+        const sampleOrder = {
+          id: `ORD-DEMO-${Date.now().toString(36).toUpperCase()}`,
+          date: new Date().toISOString(),
+          customer: { firstName: 'Demo', lastName: 'Customer', email: 'demo@example.com', address: '123 Demo St' },
+          payment: { method: 'card', cardLast4: '4242', cardName: 'Demo Customer' },
+          items: [ { name: 'Linen Blend Blazer', price: 89.99, quantity: 1, image: sampleProducts[0].image } ],
+        };
+        save(PRODUCTS_KEY, sampleProducts);
+        save(ORDERS_KEY, [sampleOrder]);
+        renderProducts(); renderOrders();
+        alert('Sample products and one demo order were added.');
+      });
+      if (clearBtn) clearBtn.addEventListener('click', () => {
+        if (!confirm('Clear all products and orders from localStorage?')) return;
+        localStorage.removeItem(ORDERS_KEY);
+        localStorage.removeItem(PRODUCTS_KEY);
+        renderProducts(); renderOrders();
+      });
+      const refreshBtn = document.getElementById('refresh-data');
+      if (refreshBtn) refreshBtn.addEventListener('click', () => { renderProducts(); renderOrders(); });
+
+      // listen for storage changes from other tabs (e.g., checkout in another tab)
+      window.addEventListener('storage', (e) => {
+        if (!e) return;
+        if (e.key === ORDERS_KEY) renderOrders();
+        if (e.key === PRODUCTS_KEY) renderProducts();
+      });
     </script>
   </body>
 </html>
