@@ -103,173 +103,174 @@
       </div>
     </div>
 
-    <script src="script.js"></script>
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        const STORAGE_KEY = 'fashionhub-cart';
-        const formatCurrency = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+<script type="module">
+      import { api } from '/src/api/client.js';
+      import { showToast } from '/src/ui/toast.js';
 
-        const loadCart = () => {
-          try {
-            return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-          } catch (e) {
-            return [];
-          }
-        };
+      const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 
-        const checkoutForm = document.querySelector('.checkout-form');
-        const summaryItems = document.querySelector('#summary-items');
-        const summarySubtotal = document.querySelector('#summary-subtotal');
-        const summaryTotal = document.querySelector('#summary-total');
+      const checkoutForm = document.querySelector('.checkout-form') as HTMLFormElement;
+      const summaryItems = document.querySelector('#summary-items') as HTMLElement;
+      const summarySubtotal = document.querySelector('#summary-subtotal') as HTMLElement;
+      const summaryShipping = document.querySelector('#summary-shipping') as HTMLElement;
+      const summaryTotal = document.querySelector('#summary-total') as HTMLElement;
+      const submitBtn = document.querySelector('.checkout-submit') as HTMLButtonElement;
 
-        const renderSummary = () => {
-          const cart = loadCart();
-          if (!cart.length) {
+      async function renderSummary() {
+        try {
+          const { items, total, count } = await api.cart.get();
+          if (!items.length) {
             summaryItems.innerHTML = '<div class="empty-cart">Your cart is empty.</div>';
             summarySubtotal.textContent = formatCurrency(0);
+            summaryShipping.textContent = formatCurrency(0);
             summaryTotal.textContent = formatCurrency(0);
+            submitBtn.disabled = true;
             return;
           }
 
-          summaryItems.innerHTML = cart.map(item => `
+          summaryItems.innerHTML = items.map((item: any) => `
             <div class="summary-item">
               <div>
                 <strong>${item.name}</strong>
+                ${item.size || item.color ? `<span>${[item.size, item.color].filter(Boolean).join(' / ')}</span>` : ''}
                 <span>${item.quantity} item${item.quantity > 1 ? 's' : ''}</span>
               </div>
               <span>${formatCurrency(item.price * item.quantity)}</span>
             </div>
           `).join('');
 
-          const subtotal = cart.reduce((s, it) => s + (it.price * it.quantity), 0);
+          const subtotal = total;
+          const shipping = subtotal >= 99 ? 0 : 9.99;
+          const tax = subtotal * 0.08;
+          const grandTotal = subtotal + shipping + tax;
+
           summarySubtotal.textContent = formatCurrency(subtotal);
-          summaryTotal.textContent = formatCurrency(subtotal);
-        };
+          summaryShipping.textContent = shipping === 0 ? 'Free' : formatCurrency(shipping);
+          summaryTotal.textContent = formatCurrency(grandTotal);
+        } catch (err) {
+          console.error('Failed to load cart:', err);
+          summaryItems.innerHTML = '<div class="empty-cart">Failed to load cart.</div>';
+        }
+      }
 
-        renderSummary();
+      // Prefill subscriber email if available
+      try {
+        const storedEmail = localStorage.getItem('fashionhub-subscriber-email');
+        if (storedEmail) {
+          const emailInput = checkoutForm.querySelector('input[type="email"]') as HTMLInputElement;
+          if (emailInput) emailInput.value = storedEmail;
+        }
+      } catch (e) {
+        // ignore
+      }
 
-        // Prefill subscriber email if available
-        try {
-          const storedEmail = localStorage.getItem('fashionhub-subscriber-email');
-          if (storedEmail) {
-            const emailInput = checkoutForm.querySelector('input[type="email"]');
-            if (emailInput) emailInput.value = storedEmail;
-          }
-        } catch (e) {
-          // ignore
+      // inline error helpers
+      function showFieldError(input: HTMLInputElement | HTMLTextAreaElement, msg: string) {
+        let err = input.parentElement?.querySelector('.field-error') as HTMLElement;
+        if (!err) {
+          err = document.createElement('div');
+          const id = `field-error-${Math.random().toString(36).slice(2,9)}`;
+          err.id = id;
+          err.className = 'field-error';
+          input.parentElement?.appendChild(err);
+          input.setAttribute('aria-describedby', id);
+        }
+        err.textContent = msg;
+        input.classList.add('invalid');
+        input.focus();
+      }
+
+      function clearFieldErrors() {
+        checkoutForm.querySelectorAll('.field-error').forEach(e => e.remove());
+        checkoutForm.querySelectorAll('[aria-describedby]').forEach(i => i.removeAttribute('aria-describedby'));
+        checkoutForm.querySelectorAll('.invalid').forEach(i => i.classList.remove('invalid'));
+      }
+
+      function luhn(num: string): boolean {
+        if (!/^[0-9]+$/.test(num)) return false;
+        let sum = 0, alt = false;
+        for (let i = num.length - 1; i >= 0; i--) {
+          let n = parseInt(num.charAt(i), 10);
+          if (alt) { n *= 2; if (n > 9) n -= 9; }
+          sum += n; alt = !alt;
+        }
+        return sum % 10 === 0;
+      }
+
+      checkoutForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        clearFieldErrors();
+
+        const emailInput = checkoutForm.querySelector('input[type="email"]') as HTMLInputElement;
+        const email = emailInput.value.trim();
+        if (!email) {
+          showFieldError(emailInput, 'Please enter an email to continue.');
+          return;
         }
 
-        // inline error helpers
-        const showFieldError = (input, msg) => {
-          if (!input) return;
-          let err = input.parentElement.querySelector('.field-error');
-          if (!err) {
-            err = document.createElement('div');
-            const id = `field-error-${Math.random().toString(36).slice(2,9)}`;
-            err.id = id;
-            err.className = 'field-error';
-            input.parentElement.appendChild(err);
-            input.setAttribute('aria-describedby', id);
-          }
-          err.textContent = msg;
-          input.classList.add('invalid');
-          input.focus();
-        };
+        const cardnumberInput = checkoutForm.querySelector('input[name="cardnumber"]') as HTMLInputElement;
+        const cardnumber = cardnumberInput.value.replace(/\s+/g, '');
+        const expInput = checkoutForm.querySelector('input[name="exp"]') as HTMLInputElement;
+        const exp = expInput.value.trim();
+        const cvcInput = checkoutForm.querySelector('input[name="cvc"]') as HTMLInputElement;
+        const cvc = cvcInput.value.trim();
+        const cardnameInput = checkoutForm.querySelector('input[name="cardname"]') as HTMLInputElement;
+        const cardname = cardnameInput.value.trim();
 
-        const clearFieldErrors = () => {
-          checkoutForm.querySelectorAll('.field-error').forEach(e => e.remove());
-          checkoutForm.querySelectorAll('[aria-describedby]').forEach(i => i.removeAttribute('aria-describedby'));
-          checkoutForm.querySelectorAll('.invalid').forEach(i => i.classList.remove('invalid'));
-        };
-        checkoutForm?.addEventListener('submit', (event) => {
-          event.preventDefault();
-          clearFieldErrors();
-          // simple validation
-          const emailInput = checkoutForm.querySelector('input[type="email"]');
-          const email = emailInput.value.trim();
-          if (!email) {
-            showFieldError(emailInput, 'Please enter an email to continue.');
-            return;
-          }
+        if (!luhn(cardnumber)) {
+          showFieldError(cardnumberInput, 'Please enter a valid card number. For testing use 4242 4242 4242 4242');
+          return;
+        }
 
-          // payment fields validation (mock)
-          const cardnumberInput = checkoutForm.querySelector('input[name="cardnumber"]');
-          const cardnumber = cardnumberInput.value.replace(/\s+/g, '');
-          const expInput = checkoutForm.querySelector('input[name="exp"]');
-          const exp = expInput.value.trim();
-          const cvcInput = checkoutForm.querySelector('input[name="cvc"]');
-          const cvc = cvcInput.value.trim();
-          const cardnameInput = checkoutForm.querySelector('input[name="cardname"]');
-          const cardname = cardnameInput.value.trim();
+        const m = exp.match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
+        if (!m) {
+          showFieldError(expInput, 'Expiry must be in MM/YY format');
+          return;
+        }
+        const month = Number(m[1]);
+        const year = Number('20' + m[2]);
+        const now = new Date();
+        const expDate = new Date(year, month - 1, 1);
+        if (expDate < new Date(now.getFullYear(), now.getMonth(), 1)) {
+          showFieldError(expInput, 'Card expiry must be in the future');
+          return;
+        }
 
-          const luhn = (num) => {
-            if (!/^[0-9]+$/.test(num)) return false;
-            let sum = 0, alt = false;
-            for (let i = num.length - 1; i >= 0; i--) {
-              let n = parseInt(num.charAt(i), 10);
-              if (alt) { n *= 2; if (n > 9) n -= 9; }
-              sum += n; alt = !alt;
-            }
-            return sum % 10 === 0;
-          };
+        if (!/^[0-9]{3,4}$/.test(cvc)) {
+          showFieldError(cvcInput, 'CVC must be 3 or 4 digits');
+          return;
+        }
 
-          if (!luhn(cardnumber)) {
-            showFieldError(cardnumberInput, 'Please enter a valid card number. For testing use 4242 4242 4242 4242');
-            return;
-          }
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Processing...';
 
-          const m = exp.match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
-          if (!m) {
-            showFieldError(expInput, 'Expiry must be in MM/YY format');
-            return;
-          }
-          const month = Number(m[1]);
-          const year = Number('20' + m[2]);
-          const now = new Date();
-          const expDate = new Date(year, month - 1, 1);
-          if (expDate < new Date(now.getFullYear(), now.getMonth(), 1)) {
-            showFieldError(expInput, 'Card expiry must be in the future');
-            return;
-          }
+        try {
+          // TODO: Integrate Stripe here - create payment method and get paymentMethodId
+          // const paymentMethod = await stripe.createPaymentMethod({...});
 
-          if (!/^[0-9]{3,4}$/.test(cvc)) {
-            showFieldError(cvcInput, 'CVC must be 3 or 4 digits');
-            return;
-          }
-
-          // Create a fake order id and store order in sessionStorage for confirmation page
-          const orderId = `ORD-${Date.now().toString(36).toUpperCase()}`;
-          const order = {
-            id: orderId,
-            date: new Date().toISOString(),
-            customer: {
-              firstName: checkoutForm.querySelector('input[placeholder="Jane"]').value || '',
-              lastName: checkoutForm.querySelector('input[placeholder="Smith"]').value || '',
-              email,
-              address: checkoutForm.querySelector('textarea').value || ''
-            },
-            payment: {
-              method: 'card',
-              cardLast4: cardnumber.slice(-4),
-              cardName: cardname || ''
-            },
-            items: loadCart()
-          };
-
-          // persist order in localStorage for admin view
-          try {
-            const existing = JSON.parse(localStorage.getItem('fashionhub-orders') || '[]');
-            existing.push(order);
-            localStorage.setItem('fashionhub-orders', JSON.stringify(existing));
-          } catch (e) {
-            // ignore
-          }
+          const order = await api.orders.create({
+            email,
+            firstName: checkoutForm.querySelector('input[placeholder="Jane"]')?.value || '',
+            lastName: checkoutForm.querySelector('input[placeholder="Smith"]')?.value || '',
+            address: checkoutForm.querySelector('textarea')?.value || '',
+            city: checkoutForm.querySelector('input[placeholder="London"]')?.value || '',
+            postalCode: checkoutForm.querySelector('input[placeholder="SW1A 1AA"]')?.value || '',
+            country: 'US',
+            // paymentMethodId: paymentMethod.id
+          });
 
           sessionStorage.setItem('fashionhub-last-order', JSON.stringify(order));
-          localStorage.removeItem(STORAGE_KEY);
+          showToast('Order placed successfully!');
           window.location.href = 'order-success.html';
-        });
+        } catch (err: any) {
+          console.error('Order failed:', err);
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Place order';
+          showToast(err.data?.error || 'Failed to place order. Please try again.');
+        }
       });
+
+      renderSummary();
     </script>
   </body>
 </html>

@@ -61,6 +61,60 @@
             </div>
           </section>
 
+          <div class="search-filters-bar">
+            <div class="search-bar" role="search">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="M21 21l-4.35-4.35"></path>
+              </svg>
+              <input type="search" id="search-input" placeholder="Search products..." aria-label="Search products" />
+            </div>
+            <div class="filters-toggle" id="filters-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M3 3h18v18H3z"></path>
+                <path d="M9 9h6v6H9z"></path>
+              </svg>
+              <span>Filters</span>
+            </div>
+            <div class="sort-select-wrapper">
+              <select id="sort-by" aria-label="Sort products">
+                <option value="name">Sort by name</option>
+                <option value="price-asc">Price: low to high</option>
+                <option value="price-desc">Price: high to low</option>
+                <option value="newest">Newest first</option>
+              </select>
+            </div>
+          </div>
+
+          <aside class="filters-panel" id="filters-panel" aria-label="Product filters">
+            <div class="filters-header">
+              <h3>Filters</h3>
+              <button class="close-filters" id="close-filters" aria-label="Close filters">×</button>
+            </div>
+            <div class="filters-content">
+              <fieldset id="category-filters" class="filter-group">
+              </fieldset>
+              <fieldset class="filter-group">
+                <legend>Price range</legend>
+                <div class="price-inputs">
+                  <label>
+                    <span>Min</span>
+                    <input type="number" id="price-min" min="0" max="1000" step="10" placeholder="0" />
+                  </label>
+                  <label>
+                    <span>Max</span>
+                    <input type="number" id="price-max" min="0" max="1000" step="10" placeholder="1000" />
+                  </label>
+                </div>
+              </fieldset>
+              <button class="btn btn-light" id="clear-filters">Clear all filters</button>
+            </div>
+          </aside>
+
+          <div class="results-toolbar">
+            <span id="results-count" class="results-count" aria-live="polite"></span>
+          </div>
+
           <section class="catalog panel" id="categories">
             <div class="category-row">
               <div class="category-item">
@@ -233,6 +287,7 @@
       </div>
     </footer>
 
-    <script src="script.js"></script>
+    <div id="filters-overlay" class="filters-overlay" aria-hidden="true"></div>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>
