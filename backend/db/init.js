@@ -107,6 +107,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
   CREATE INDEX IF NOT EXISTS idx_orders_session ON orders(session_id);
   CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+  CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
+  CREATE INDEX IF NOT EXISTS idx_products_price ON products(price);
+  CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at);
+  CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+  CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants(product_id);
 `);
 
 console.log('Database initialized at:', dbPath);
