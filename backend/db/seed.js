@@ -52,7 +52,10 @@ const products = [
     name: 'Leather Shoulder Bag',
     price: 79.99,
     old_price: 110.00,
-    image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=900&q=80',
+    image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=900&
+    
+    
+    =80',
     description: 'A refined everyday companion with structured lines, room for essentials, and timeless appeal.',
     features: JSON.stringify(['Full-grain leather finish', 'Spacious interior', 'Adjustable strap comfort']),
     rating: '★★★★★',

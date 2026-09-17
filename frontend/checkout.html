@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FashionHub | Checkout</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="src/styles/main.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="container checkout-shell">
+        <header class="topbar">
+          <a class="brand" href="index.html">LUNORA</a>
+          <a href="shop.html" class="link-more">Continue shopping</a>
+        </header>
+
+        <main class="checkout-layout">
+          <section class="checkout-panel">
+            <p class="eyebrow">Checkout</p>
+            <h1>Secure your pieces</h1>
+
+            <form class="checkout-form" role="form" aria-label="Checkout form">
+              <div class="form-grid">
+                <label>
+                  <span>First name</span>
+                  <input type="text" placeholder="Jane" />
+                </label>
+                <label>
+                  <span>Last name</span>
+                  <input type="text" placeholder="Smith" />
+                </label>
+              </div>
+
+              <label>
+                <span>Email</span>
+                <input type="email" placeholder="jane@example.com" aria-required="true" />
+              </label>
+
+              <label>
+                <span>Shipping address</span>
+                <textarea rows="4" placeholder="123 Bloom Street, London"></textarea>
+              </label>
+
+              <div class="form-grid">
+                <label>
+                  <span>City</span>
+                  <input type="text" placeholder="London" />
+                </label>
+                <label>
+                  <span>Postal code</span>
+                  <input type="text" placeholder="SW1A 1AA" />
+                </label>
+              </div>
+
+              <fieldset class="payment-section">
+                <legend>Payment</legend>
+                <label>
+                  <span>Name on card</span>
+                  <input type="text" name="cardname" placeholder="Jane Smith" aria-required="true" />
+                </label>
+
+                <label>
+                  <span>Card number</span>
+                  <input type="text" name="cardnumber" placeholder="4242 4242 4242 4242" inputmode="numeric" aria-required="true" />
+                </label>
+
+                <div class="form-grid">
+                  <label>
+                    <span>Expiry (MM/YY)</span>
+                    <input type="text" name="exp" placeholder="04/28" aria-required="true" />
+                  </label>
+                  <label>
+                    <span>CVC</span>
+                    <input type="text" name="cvc" placeholder="123" inputmode="numeric" aria-required="true" />
+                  </label>
+                </div>
+              </fieldset>
+
+              <button type="submit" class="btn btn-primary checkout-submit">Place order</button>
+            </form>
+          </section>
+
+          <aside class="checkout-summary">
+            <h2>Order summary</h2>
+            <div id="summary-items"></div>
+            <div class="summary-total">
+              <span>Subtotal</span>
+              <strong id="summary-subtotal">$0.00</strong>
+            </div>
+            <div class="summary-total">
+              <span>Shipping</span>
+              <strong id="summary-shipping">Free</strong>
+            </div>
+            <div class="summary-total grand-total">
+              <span>Total</span>
+              <strong id="summary-total">$0.00</strong>
+            </div>
+          </aside>
+        </main>
+      </div>
+    </div>
+
+<script type="module">
+      import { api } from '/src/api/client.ts';
+      import { showToast } from '/src/components/ui/Toast.ts';
+
+      const formatCurrency = (amount) =>
+        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+
+      const checkoutForm = document.querySelector('.checkout-form');
+      const summaryItems = document.querySelector('#summary-items');
+      const summarySubtotal = document.querySelector('#summary-subtotal');
+      const summaryShipping = document.querySelector('#summary-shipping');
+      const summaryTotal = document.querySelector('#summary-total');
+      const submitBtn = document.querySelector('.checkout-submit');
+
+      async function renderSummary() {
+        try {
+          const { items, total } = await api.cart.get();
+          if (!items.length) {
+            summaryItems.innerHTML = '<div class="empty-cart">Your cart is empty.</div>';
+            summarySubtotal.textContent = formatCurrency(0);
+            summaryShipping.textContent = formatCurrency(0);
+            summaryTotal.textContent = formatCurrency(0);
+            submitBtn.disabled = true;
+            return;
+          }
+
+          summaryItems.innerHTML = items.map((item) => `
+            <div class="summary-item">
+              <div>
+                <strong>${item.name}</strong>
+                ${item.size || item.color ? `<span>${[item.size, item.color].filter(Boolean).join(' / ')}</span>` : ''}
+                <span>${item.quantity} item${item.quantity > 1 ? 's' : ''}</span>
+              </div>
+              <span>${formatCurrency(item.price * item.quantity)}</span>
+            </div>
+          `).join('');
+
+          const subtotal = total;
+          const shipping = subtotal >= 99 ? 0 : 9.99;
+          const tax = subtotal * 0.08;
+          const grandTotal = subtotal + shipping + tax;
+
+          summarySubtotal.textContent = formatCurrency(subtotal);
+          summaryShipping.textContent = shipping === 0 ? 'Free' : formatCurrency(shipping);
+          summaryTotal.textContent = formatCurrency(grandTotal);
+        } catch (err) {
+          console.error('Failed to load cart:', err);
+          summaryItems.innerHTML = '<div class="empty-cart">Failed to load cart.</div>';
+        }
+      }
+
+      try {
+        const storedEmail = localStorage.getItem('fashionhub-subscriber-email');
+        if (storedEmail) {
+          const emailInput = checkoutForm.querySelector('input[type="email"]');
+          if (emailInput) emailInput.value = storedEmail;
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      function showFieldError(input, msg) {
+        let err = input.parentElement?.querySelector('.field-error');
+        if (!err) {
+          err = document.createElement('div');
+          const id = `field-error-${Math.random().toString(36).slice(2, 9)}`;
+          err.id = id;
+          err.className = 'field-error';
+          input.parentElement?.appendChild(err);
+          input.setAttribute('aria-describedby', id);
+        }
+        err.textContent = msg;
+        input.classList.add('invalid');
+        input.focus();
+      }
+
+      function clearFieldErrors() {
+        checkoutForm.querySelectorAll('.field-error').forEach((e) => e.remove());
+        checkoutForm.querySelectorAll('[aria-describedby]').forEach((i) => i.removeAttribute('aria-describedby'));
+        checkoutForm.querySelectorAll('.invalid').forEach((i) => i.classList.remove('invalid'));
+      }
+
+      function luhn(num) {
+        if (!/^[0-9]+$/.test(num)) return false;
+        let sum = 0;
+        let alt = false;
+        for (let i = num.length - 1; i >= 0; i--) {
+          let n = parseInt(num.charAt(i), 10);
+          if (alt) {
+            n *= 2;
+            if (n > 9) n -= 9;
+          }
+          sum += n;
+          alt = !alt;
+        }
+        return sum % 10 === 0;
+      }
+
+      checkoutForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        clearFieldErrors();
+
+        const emailInput = checkoutForm.querySelector('input[type="email"]');
+        const email = emailInput.value.trim();
+        if (!email) {
+          showFieldError(emailInput, 'Please enter an email to continue.');
+          return;
+        }
+
+        const cardnumberInput = checkoutForm.querySelector('input[name="cardnumber"]');
+        const cardnumber = cardnumberInput.value.replace(/\s+/g, '');
+        const expInput = checkoutForm.querySelector('input[name="exp"]');
+        const exp = expInput.value.trim();
+        const cvcInput = checkoutForm.querySelector('input[name="cvc"]');
+        const cvc = cvcInput.value.trim();
+
+        if (!luhn(cardnumber)) {
+          showFieldError(cardnumberInput, 'Please enter a valid card number. For testing use 4242 4242 4242 4242');
+          return;
+        }
+
+        const m = exp.match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
+        if (!m) {
+          showFieldError(expInput, 'Expiry must be in MM/YY format');
+          return;
+        }
+        const month = Number(m[1]);
+        const year = Number('20' + m[2]);
+        const now = new Date();
+        const expDate = new Date(year, month - 1, 1);
+        if (expDate < new Date(now.getFullYear(), now.getMonth(), 1)) {
+          showFieldError(expInput, 'Card expiry must be in the future');
+          return;
+        }
+
+        if (!/^[0-9]{3,4}$/.test(cvc)) {
+          showFieldError(cvcInput, 'CVC must be 3 or 4 digits');
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Processing...';
+
+        try {
+          const order = await api.orders.create({
+            email,
+            firstName: checkoutForm.querySelector('input[placeholder="Jane"]')?.value || '',
+            lastName: checkoutForm.querySelector('input[placeholder="Smith"]')?.value || '',
+            address: checkoutForm.querySelector('textarea')?.value || '',
+            city: checkoutForm.querySelector('input[placeholder="London"]')?.value || '',
+            postalCode: checkoutForm.querySelector('input[placeholder="SW1A 1AA"]')?.value || '',
+            country: 'US',
+          });
+
+          sessionStorage.setItem('fashionhub-last-order', JSON.stringify(order));
+          showToast('Order placed successfully!');
+          window.location.href = 'order-success.html';
+        } catch (err) {
+          console.error('Order failed:', err);
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Place order';
+          showToast(err?.data?.error || 'Failed to place order. Please try again.');
+        }
+      });
+
+      renderSummary();
+    </script>
+  </body>
+</html>

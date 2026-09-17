@@ -6,8 +6,8 @@ import {
   removeFromCart,
   subscribe,
 } from './state.ts';
-import { formatCurrency } from '../utils/format.ts';
-import type { CartItem } from '../types/cart.ts';
+import { formatCurrency } from '@utils/format.ts';
+import type { CartItem } from '@app-types/cart.ts';
 
 let cartPanel: HTMLElement | null = null;
 let cartToggle: HTMLElement | null = null;
@@ -66,7 +66,7 @@ function toggleCart(): void {
   }
 }
 
-function openCart(): void {
+export function openCart(): void {
   cartPanel?.classList.add('open');
   cartToggle?.setAttribute('aria-expanded', 'true');
   cartPanel?.setAttribute('aria-hidden', 'false');
@@ -74,7 +74,7 @@ function openCart(): void {
   enableFocusTrap();
 }
 
-function closeCart(): void {
+export function closeCart(): void {
   cartPanel?.classList.remove('open');
   cartToggle?.setAttribute('aria-expanded', 'false');
   cartPanel?.setAttribute('aria-hidden', 'true');

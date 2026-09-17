@@ -1,4 +1,4 @@
-import type { CartItem, Product, Order } from '../types/cart.ts';
+import type { CartItem, Product, Order } from '@app-types/cart.ts';
 
 const STORAGE_KEYS = {
   cart: 'fashionhub-cart',

@@ -1,6 +1,11 @@
-import { subscribe as subscribeFilters, setFilters, resetFilters, getFilters } from './filters.ts';
+import {
+  subscribe as subscribeFilters,
+  setFilters,
+  resetFilters,
+  getFilters,
+  type FilterState,
+} from './filters.ts';
 import { renderProductGrid } from './render.ts';
-import type { FilterState } from './filters.ts';
 
 let searchInput: HTMLInputElement | null = null;
 let categoryFilters: HTMLFieldSetElement | null = null;
@@ -127,7 +132,7 @@ function closeFiltersPanel(): void {
   document.body.style.overflow = '';
 }
 
-function onFiltersChange(filters: FilterState, results: Product[]): void {
+function onFiltersChange(_filters: FilterState, results: Product[]): void {
   updateResultsCount(results.length);
   renderProductGrid('.product-grid');
 }

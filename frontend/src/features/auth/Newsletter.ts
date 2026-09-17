@@ -1,4 +1,4 @@
-import { setSubscriberEmail } from '../utils/storage.ts';
+import { setSubscriberEmail } from '@utils/storage.ts';
 
 export function initNewsletter(): void {
   const forms = document.querySelectorAll<HTMLFormElement>('.subscribe-form, .footer-email');

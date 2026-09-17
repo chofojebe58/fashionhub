@@ -1,11 +1,16 @@
-import { initCart } from './cart/state.ts';
-import { initCartUI } from './cart/ui.ts';
-import { renderProductGrid, renderProductDetail } from './products/render.ts';
-import { initSearchFilters } from './products/search-ui.ts';
-import { initWishlist } from './ui/wishlist.ts';
-import { initNewsletter } from './ui/newsletter.ts';
-import { registerServiceWorker } from './ui/service-worker.ts';
-import { initLazyImages } from './utils/images.ts';
+import '@styles/main.css';
+
+import { initCart } from '@features/cart/state.ts';
+import { initCartUI } from '@features/cart/ui.ts';
+import {
+  renderProductGrid,
+  renderProductDetail,
+  initAddToCart,
+} from '@features/products/render.ts';
+import { initSearchFilters } from '@features/products/search-ui.ts';
+import { initWishlist } from '@features/user/Wishlist.ts';
+import { initNewsletter } from '@features/auth/Newsletter.ts';
+import { initLazyImages } from '@utils/images.ts';
 
 document.addEventListener('DOMContentLoaded', async () => {
   initLazyImages();
@@ -14,7 +19,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   initWishlist();
   initNewsletter();
   initSearchFilters();
-  registerServiceWorker();
+  initAddToCart();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').catch((err) => {
+      console.warn('Service worker registration failed:', err);
+    });
+  }
 
   if (document.querySelector('.product-grid')) {
     renderProductGrid();

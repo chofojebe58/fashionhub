@@ -757,7 +757,8 @@ h1 {
   box-shadow: 0 12px 24px rgba(17, 17, 17, 0.12);
 }
 
-.products-wrap {
+.products-wrap,
+.product-wrap {
   margin-top: 18px;
 }
 
@@ -1969,7 +1970,8 @@ footer {
     display: none;
   }
 
-  .search-bar {
+  /* Only hide the header search — keep the shop filters search visible */
+  .topbar .search-bar {
     display: none;
   }
 
@@ -2111,6 +2113,14 @@ footer {
   color: var(--muted);
   font-size: 1.08rem;
   line-height: 1.7;
+}
+
+.shop-hero .eyebrow,
+.lookbook-hero .eyebrow {
+  margin-bottom: 12px;
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
 }
 
 .shop-hero-actions,
@@ -2328,12 +2338,10 @@ footer {
 
   .cta-row,
   .mini-features,
-  .category-row,
   .promo-grid,
   .trust-bar,
   .newsletter-wrap,
   .footer-grid,
-  .product-grid,
   .style-grid {
     grid-template-columns: 1fr;
   }
@@ -2350,6 +2358,24 @@ footer {
 
   .category-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .search-filters-bar {
+    gap: 10px;
+  }
+
+  .search-filters-bar .search-bar {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .shop-hero h1 {
+    font-size: clamp(2.4rem, 10vw, 3.4rem);
   }
 
   .section-header {

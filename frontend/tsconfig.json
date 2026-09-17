@@ -20,13 +20,11 @@
       "@/*": ["src/*"],
       "@features/*": ["src/features/*"],
       "@components/*": ["src/components/*"],
-      "@hooks/*": ["src/hooks/*"],
       "@utils/*": ["src/utils/*"],
-      "@types/*": ["src/types/*"],
+      "@app-types/*": ["src/types/*"],
       "@api/*": ["src/api/*"],
       "@styles/*": ["src/styles/*"]
     }
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src"]
 }

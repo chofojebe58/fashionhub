@@ -1,5 +1,5 @@
-import { loadProducts, saveProducts } from '../utils/storage.ts';
-import type { Product } from '../types/cart.ts';
+import { loadProducts, saveProducts } from '@utils/storage.ts';
+import type { Product } from '@app-types/cart.ts';
 
 const DEFAULT_PRODUCTS: Record<string, Product> = {
   'linen-blend-blazer': {
@@ -51,7 +51,7 @@ const DEFAULT_PRODUCTS: Record<string, Product> = {
     price: 79.99,
     oldPrice: 110.0,
     image:
-      'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=900&q=80',
+      'https://i.pinimg.com/1200x/d6/0a/0c/d60a0c218057be27adcdb52c72eaeb92.jpg',
     description:
       'A refined everyday companion with structured lines, room for essentials, and timeless appeal.',
     features: ['Full-grain leather finish', 'Spacious interior', 'Adjustable strap comfort'],

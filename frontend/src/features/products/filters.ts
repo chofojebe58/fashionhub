@@ -1,5 +1,5 @@
 import { getProductCatalog } from './catalog.ts';
-import type { Product } from '../types/cart.ts';
+import type { Product } from '@app-types/cart.ts';
 
 export interface FilterState {
   query: string;
