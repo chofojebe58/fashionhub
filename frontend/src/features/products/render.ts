@@ -1,150 +1,157 @@
+import { api } from '@api/client.ts';
 import { getProduct } from './catalog.ts';
-import {
-  getFilteredProducts,
-  subscribe as subscribeFilters,
-} from './filters.ts';
+import { getFilteredProducts, isOnSale, subscribe as subscribeFilters } from './filters.ts';
 import { formatCurrency } from '@utils/format.ts';
+import { escapeAttr, escapeHtml, safeUrl } from '@utils/escape.ts';
 import { addToCart, type AddToCartInput } from '@features/cart/state.ts';
 import { openCart } from '@features/cart/ui.ts';
 import { showToast } from '@components/ui/Toast.ts';
-import type { Product } from '@app-types/cart.ts';
-
+import { isWishlisted, syncWishlistButtons, toggleWishlist } from '@features/user/Wishlist.ts';
+import type { Product, ProductVariant } from '@app-types/product.ts';
 
 /* ================================
    Product Card
 ================================ */
 
-function createProductCard(product: Product): string {
+function discountPercent(product: Product): number | null {
+  if (!isOnSale(product) || !product.oldPrice) return null;
+  return Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100);
+}
+
+export function createProductCard(product: Product): string {
+  const name = escapeAttr(product.name);
+  const href = `product.html?id=${encodeURIComponent(product.id)}`;
+  const discount = discountPercent(product);
+  const soldOut = product.stock !== undefined && product.stock <= 0;
+  const wished = isWishlisted(product.id);
+
   return `
     <article
-      class="product-card"
-      data-product-id="${product.id}"
-      data-name="${product.name}"
-      data-price="${product.price}"
-      data-image="${product.image}"
+      class="product-card${soldOut ? ' is-sold-out' : ''}"
+      data-product-id="${escapeAttr(product.id)}"
+      data-name="${name}"
+      data-price="${escapeAttr(product.price)}"
+      data-image="${safeUrl(product.image, '')}"
     >
-
-      <a
-        class="product-image-link"
-        href="product.html?id=${product.id}"
-        aria-label="View ${product.name}"
-      >
-        <div class="product-image">
+      <div class="product-image">
+        <a class="product-image-link" href="${href}" aria-label="View ${name}">
           <img
-            src="${product.image}"
-            alt="${product.name}"
+            src="${safeUrl(product.image, '')}"
+            alt="${name}"
             width="700"
             height="560"
             loading="lazy"
             decoding="async"
           />
+        </a>
 
-          <span class="wishlist" role="button" tabindex="0">
-            ♡
-          </span>
-        </div>
-      </a>
+        ${discount ? `<span class="badge badge-sale">−${discount}%</span>` : ''}
+        ${soldOut ? '<span class="badge badge-sold-out">Sold out</span>' : ''}
+
+        <button
+          type="button"
+          class="wishlist${wished ? ' active' : ''}"
+          data-product-id="${escapeAttr(product.id)}"
+          aria-pressed="${wished}"
+          aria-label="${wished ? 'Remove' : 'Save'} ${name} ${wished ? 'from' : 'to'} wishlist"
+        >${wished ? '♥' : '♡'}</button>
+      </div>
 
       <div class="product-info">
-
-        <a
-          class="product-name-link"
-          href="product.html?id=${product.id}"
-        >
-          <h3 class="product-name">${product.name}</h3>
+        <a class="product-name-link" href="${href}">
+          <h3 class="product-name">${escapeHtml(product.name)}</h3>
         </a>
 
         <div class="price-line">
-          <span class="price-text">
-            ${formatCurrency(product.price)}
-          </span>
-
-          ${
-            product.oldPrice
-              ? `<span class="old-price">
-                   ${formatCurrency(product.oldPrice)}
-                 </span>`
-              : ''
-          }
+          <span class="price-text">${formatCurrency(product.price)}</span>
+          ${product.oldPrice ? `<span class="old-price">${formatCurrency(product.oldPrice)}</span>` : ''}
         </div>
 
         <div class="product-rating">
-          <span class="rating">
-            ${product.rating || ''}
-          </span>
-
-          <span class="reviews">
-            ${product.reviews || ''}
-          </span>
+          <span class="rating" aria-hidden="true">${escapeHtml(product.rating ?? '')}</span>
+          <span class="reviews">${escapeHtml(product.reviews ?? '')}</span>
         </div>
 
         <button
           class="add-to-cart"
           type="button"
-          data-product-id="${product.id}"
-        >
-          Add to cart
-        </button>
-
+          data-product-id="${escapeAttr(product.id)}"
+          ${soldOut ? 'disabled' : ''}
+        >${soldOut ? 'Sold out' : 'Add to cart'}</button>
       </div>
     </article>
   `;
 }
 
+export function createSkeletonCard(): string {
+  return `
+    <article class="product-card skeleton-card" aria-hidden="true">
+      <div class="product-image skeleton-block"></div>
+      <div class="product-info">
+        <div class="skeleton-line" style="width:70%"></div>
+        <div class="skeleton-line" style="width:40%"></div>
+        <div class="skeleton-line skeleton-button"></div>
+      </div>
+    </article>
+  `;
+}
 
 /* ================================
    Product Grid
 ================================ */
 
 let currentContainer: Element | null = null;
+let currentSelector = '.product-grid';
 
-export function renderProductGrid(
-  containerSelector = '.product-grid'
-): void {
-
+export function renderProductGridSkeleton(containerSelector = '.product-grid', count = 5): void {
   const container = document.querySelector(containerSelector);
+  if (!container) return;
+  container.innerHTML = Array.from({ length: count }, createSkeletonCard).join('');
+}
 
+export function renderProductGrid(containerSelector = currentSelector): void {
+  const container = document.querySelector<HTMLElement>(containerSelector);
   if (!container) return;
 
   currentContainer = container;
+  currentSelector = containerSelector;
 
-  const products = getFilteredProducts();
+  let products = getFilteredProducts();
 
-  container.innerHTML = products
-    .map(createProductCard)
-    .join('');
+  // The homepage grid is marked `data-featured-only`, so it shows just the
+  // products an admin has featured rather than the whole catalogue.
+  if (container.dataset.featuredOnly === 'true') {
+    products = products.filter((product) => product.featured);
+  }
 
-  bindAddToCartButtons(container);
+  container.innerHTML = products.length
+    ? products.map(createProductCard).join('')
+    : `<div class="grid-empty">
+         <p>No products match your filters.</p>
+         <button type="button" class="btn btn-light" data-clear-filters>Clear all filters</button>
+       </div>`;
+
+  bindCardInteractions(container);
 }
-
 
 /* ================================
-   Bind Buttons
+   Event Delegation
 ================================ */
 
-let addToCartBound = false;
+let delegated = false;
 
-function ensureAddToCartDelegation(): void {
-  if (addToCartBound) return;
+function ensureDelegation(): void {
+  if (delegated) return;
+  delegated = true;
   document.addEventListener('click', onDocumentClick);
-  addToCartBound = true;
 }
 
-function bindAddToCartButtons(container: Element): void {
-  ensureAddToCartDelegation();
-
-  container
-    .querySelectorAll<HTMLButtonElement>('.add-to-cart')
-    .forEach(button => {
-      if (button.dataset.bound === 'true') return;
-      button.dataset.bound = 'true';
-      button.addEventListener('click', handleAddToCart);
-    });
-
-  container.querySelectorAll<HTMLElement>('.wishlist').forEach(button => {
-    if (button.dataset.bound === 'true') return;
-    button.dataset.bound = 'true';
-    button.addEventListener('click', handleWishlist);
+function bindCardInteractions(container: Element): void {
+  ensureDelegation();
+  // Individual listeners are unnecessary — the document delegate handles both
+  // `.add-to-cart` and `.wishlist`, including on cards rendered later.
+  container.querySelectorAll<HTMLElement>('[data-bound]').forEach((el) => {
+    el.removeAttribute('data-bound');
   });
 }
 
@@ -152,779 +159,374 @@ function onDocumentClick(event: Event): void {
   const target = event.target as Element | null;
   if (!target) return;
 
-  const addButton = target.closest('.add-to-cart') as HTMLButtonElement | null;
-  if (addButton) {
-    // Always handle via one path; skip if the button already has a direct listener
-    if (addButton.dataset.bound === 'true') return;
-    void handleAddToCart(event);
+  if (target.closest('[data-clear-filters]')) {
+    document.dispatchEvent(new CustomEvent('fashionhub:clear-filters'));
     return;
   }
 
-  const wishlist = target.closest('.wishlist') as HTMLElement | null;
-  if (wishlist && wishlist.dataset.bound !== 'true') {
-    handleWishlist(event);
+  const addButton = target.closest<HTMLButtonElement>('.add-to-cart');
+  if (addButton) {
+    void handleAddToCart(addButton);
+    return;
+  }
+
+  const wishlistButton = target.closest<HTMLButtonElement>('.wishlist');
+  if (wishlistButton) {
+    handleWishlistClick(wishlistButton);
   }
 }
 
-/** Call once on page load so static HTML add-to-cart buttons work. */
+/** Bind delegation once on page load so static HTML buttons work too. */
 export function initAddToCart(): void {
-  ensureAddToCartDelegation();
-  document.querySelectorAll('.product-grid, .product-detail').forEach(container => {
-    bindAddToCartButtons(container);
-  });
+  ensureDelegation();
 }
-
 
 /* ================================
    Add To Cart
 ================================ */
 
-async function handleAddToCart(
-  event: Event
-): Promise<void> {
-  event.preventDefault();
-  event.stopPropagation();
+async function handleAddToCart(button: HTMLButtonElement): Promise<void> {
+  if (button.disabled || button.dataset.busy === 'true') return;
 
-  const target = event.target as Element | null;
-  const button =
-    (event.currentTarget instanceof HTMLButtonElement &&
-    event.currentTarget.classList.contains('add-to-cart')
-      ? event.currentTarget
-      : target?.closest('.add-to-cart')) as HTMLButtonElement | null;
-
-  if (!button) return;
-
-  const productCard =
-    button.closest('.product-card') as HTMLElement | null;
-  const productDetail =
-    button.closest('.product-detail') as HTMLElement | null;
-  const source = productCard || productDetail;
+  const source =
+    button.closest<HTMLElement>('.product-card') ??
+    button.closest<HTMLElement>('.product-detail');
 
   if (!source) {
-    console.error('Could not find product container');
+    console.error('Could not find a product container for this button');
+    showToast('Could not add that product to your cart');
     return;
   }
 
-  const productId =
-    source.dataset.productId || source.dataset.id;
+  const productId = source.dataset.productId ?? source.dataset.id;
   const name = source.dataset.name;
   const price = Number(source.dataset.price);
-  const image = source.dataset.image || '';
+  const image = source.dataset.image ?? '';
 
-  if (!productId) {
-    showToast('Product ID is missing');
-    return;
-  }
+  if (!productId) return showToast('Product ID is missing');
+  if (!name) return showToast('Product name is missing');
+  if (!Number.isFinite(price) || price <= 0) return showToast('Invalid product price');
 
-  if (!name) {
-    showToast('Product name is missing');
-    return;
-  }
-
-  if (!Number.isFinite(price) || price <= 0) {
-    showToast('Invalid product price');
-    return;
-  }
-
-  if (button.disabled) return;
-
-  const originalText = button.textContent || 'Add to cart';
+  button.dataset.busy = 'true';
   button.disabled = true;
-  button.textContent = 'Adding...';
+  const originalText = button.textContent ?? 'Add to cart';
+  button.textContent = 'Adding…';
 
-  const input: AddToCartInput = {
-    id: String(productId),
-    name,
-    price,
-    image,
-  };
+  const input: AddToCartInput = { id: productId, name, price, image };
 
   try {
     await addToCart(input);
     showToast(`${name} added to cart`);
-    setCartButtonLabel(button);
+    flashAdded(button);
     openCart();
   } catch (error) {
     console.error('Add to cart failed:', error);
     button.disabled = false;
     button.textContent = originalText;
-    showToast('Could not add product to cart');
+    showToast(errorMessage(error, 'Could not add product to cart'));
+  } finally {
+    delete button.dataset.busy;
   }
 }
 
-
-/* ================================
-   Wishlist
-================================ */
-
-function handleWishlist(
-  event: Event
-): void {
-
-  event.preventDefault();
-  event.stopPropagation();
-
-  const button =
-    event.currentTarget as HTMLElement;
-
-  button.classList.toggle('active');
-
-  button.textContent =
-    button.classList.contains('active')
-      ? '♥'
-      : '♡';
+function errorMessage(error: unknown, fallback: string): string {
+  const data = (error as { data?: { error?: string } } | null)?.data;
+  return data?.error || fallback;
 }
 
-
-/* ================================
-   Button Feedback
-================================ */
-
-function setCartButtonLabel(
-  button: HTMLButtonElement | null
-): void {
-
+function flashAdded(button: HTMLButtonElement | null): void {
   if (!button) return;
-
-  button.textContent = 'Added';
-
+  button.textContent = 'Added ✓';
   button.disabled = true;
-
-  setTimeout(() => {
+  window.setTimeout(() => {
     button.textContent = 'Add to cart';
     button.disabled = false;
   }, 1200);
 }
 
+/* ================================
+   Wishlist
+================================ */
+
+function handleWishlistClick(button: HTMLButtonElement): void {
+  const productId = button.dataset.productId;
+  if (!productId) return;
+
+  const active = toggleWishlist(productId);
+  button.classList.toggle('active', active);
+  button.textContent = active ? '♥' : '♡';
+  button.setAttribute('aria-pressed', String(active));
+
+  const label = button.getAttribute('aria-label') ?? '';
+  button.setAttribute(
+    'aria-label',
+    label.replace(active ? /^Save\s/i : /^Remove\s/i, active ? 'Remove ' : 'Save ')
+  );
+}
 
 /* ================================
    Filter Subscription
 ================================ */
 
 subscribeFilters(() => {
-
   if (!currentContainer) return;
-
-  const products =
-    getFilteredProducts();
-
-  currentContainer.innerHTML =
-    products
-      .map(createProductCard)
-      .join('');
-
-  bindAddToCartButtons(
-    currentContainer
-  );
+  renderProductGrid(currentSelector);
 });
-
 
 /* ================================
    Product Detail
 ================================ */
 
-export function renderProductDetail(
-  rootSelector = '#product-detail-root'
-): void {
+export function renderProductDetail(rootSelector = '#product-detail-root'): void {
+  const root = document.querySelector<HTMLElement>(rootSelector);
+  if (!root) return;
 
-  const rootEl =
-    document.querySelector(
-      rootSelector
-    ) as HTMLElement | null;
-
-  if (!rootEl) return;
-
-  const root = rootEl;
-
-  const params =
-    new URLSearchParams(
-      window.location.search
-    );
-
-  const productId =
-    params.get('id') ||
-    'linen-blend-blazer';
-
-  const product =
-    getProduct(productId);
+  const productId = new URLSearchParams(window.location.search).get('id') ?? 'linen-blend-blazer';
+  const product = getProduct(productId);
 
   if (!product) {
     root.innerHTML = `
-      <p>Product not found.</p>
-    `;
-
+      <div class="product-not-found">
+        <h1>We couldn't find that piece</h1>
+        <p>The product you're looking for is no longer available.</p>
+        <a class="btn btn-primary" href="shop.html">Back to the shop</a>
+      </div>`;
+    document.title = 'FashionHub | Product not found';
     return;
   }
 
-  root.dataset.id =
-    String(product.id);
+  document.title = `FashionHub | ${product.name}`;
 
-  root.dataset.name =
-    product.name;
+  root.dataset.id = product.id;
+  root.dataset.name = product.name;
+  root.dataset.price = String(product.price);
+  root.dataset.image = product.image;
 
-  root.dataset.price =
-    String(product.price);
-
-  root.dataset.image =
-    product.image;
+  const name = escapeHtml(product.name);
+  const soldOut = product.stock !== undefined && product.stock <= 0;
 
   root.innerHTML = `
     <div class="product-detail-image">
-      <img
-        src="${product.image}"
-        alt="${product.name}"
-      />
+      <img src="${safeUrl(product.image, '')}" alt="${escapeAttr(product.name)}" />
+      ${soldOut ? '<span class="badge badge-sold-out">Sold out</span>' : ''}
     </div>
 
     <div class="product-detail-content">
-
       <p class="product-detail-breadcrumb">
-        Fashion / New Arrivals
+        <a href="shop.html">Shop</a> /
+        ${product.category ? `<a href="shop.html?category=${encodeURIComponent(product.category)}">${escapeHtml(product.category)}</a> / ` : ''}
+        ${name}
       </p>
 
-      <h1>${product.name}</h1>
+      <h1>${name}</h1>
 
       <div class="product-detail-price">
-
-        <strong>
-          ${formatCurrency(product.price)}
-        </strong>
-
-        ${
-          product.oldPrice
-            ? `<span>
-                 ${formatCurrency(product.oldPrice)}
-               </span>`
-            : ''
-        }
-
+        <strong>${formatCurrency(product.price)}</strong>
+        ${product.oldPrice ? `<span>${formatCurrency(product.oldPrice)}</span>` : ''}
       </div>
 
       <div class="product-detail-meta">
-        <span>${product.rating || ''}</span>
-        <span>${product.reviews || ''}</span>
+        <span aria-hidden="true">${escapeHtml(product.rating ?? '')}</span>
+        <span>${escapeHtml(product.reviews ?? '')}</span>
+        ${
+          product.stock !== undefined
+            ? `<span class="stock-note${soldOut ? ' out' : ''}">${
+                soldOut ? 'Out of stock' : `${product.stock} in stock`
+              }</span>`
+            : ''
+        }
       </div>
 
-      <p class="product-detail-description">
-        ${product.description}
-      </p>
+      <p class="product-detail-description">${escapeHtml(product.description)}</p>
 
       <div class="product-detail-options">
-
         <fieldset class="option-group">
           <legend>Size</legend>
-          <div
-            class="size-options"
-            id="size-options"
-          ></div>
+          <div class="size-options" id="size-options"></div>
         </fieldset>
-
         <fieldset class="option-group">
-          <legend>Color</legend>
-          <div
-            class="color-options"
-            id="color-options"
-          ></div>
+          <legend>Colour</legend>
+          <div class="color-options" id="color-options"></div>
         </fieldset>
-
       </div>
 
       <div class="product-detail-actions">
-
-        <button
-          class="add-to-cart"
-          type="button"
-          disabled
-        >
-          Loading...
+        <button class="add-to-cart" type="button" ${soldOut ? '' : 'disabled'}>
+          ${soldOut ? 'Sold out' : 'Loading…'}
         </button>
-
-        <a
-          class="secondary-btn"
-          href="index.html"
-        >
-          Continue shopping
-        </a>
-
+        <a class="secondary-btn" href="shop.html">Continue shopping</a>
       </div>
 
       <ul class="product-detail-list">
-        ${product.features
-          .map(
-            feature => `<li>${feature}</li>`
-          )
-          .join('')}
+        ${(product.features ?? []).map((f) => `<li>${escapeHtml(f)}</li>`).join('')}
       </ul>
-
     </div>
   `;
 
+  if (soldOut) return;
 
-  /* ================================
-     Load Product Variants
-  ================================= */
-
-  const detailAddToCartButton =
-    root.querySelector(
-      '.add-to-cart'
-    ) as HTMLButtonElement | null;
-
-  fetch(
-    `/api/products/${encodeURIComponent(productId)}/variants`
-  )
-    .then(async response => {
-
-      if (!response.ok) {
-        throw new Error(
-          `Variant request failed: ${response.status}`
-        );
-      }
-
-      return response.json();
-    })
-
-    .then(
-      (
-        variants: Array<{
-          id: number;
-          size: string | null;
-          color: string | null;
-        }>
-      ) => {
-
-        const sizes = [
-          ...new Set(
-            variants
-              .map(v => v.size)
-              .filter(
-                (value): value is string =>
-                  Boolean(value)
-              )
-          )
-        ];
-
-        const colors = [
-          ...new Set(
-            variants
-              .map(v => v.color)
-              .filter(
-                (value): value is string =>
-                  Boolean(value)
-              )
-          )
-        ];
-
-        const sizeOptions =
-          root.querySelector(
-            '#size-options'
-          );
-
-        const colorOptions =
-          root.querySelector(
-            '#color-options'
-          );
-
-        let selectedSize:
-          string | null = null;
-
-        let selectedColor:
-          string | null = null;
-
-        let selectedVariantId:
-          number | null = null;
-
-
-        /* ================================
-           Render Variant Options
-        ================================= */
-
-        function renderOptions(): void {
-
-          if (sizeOptions) {
-
-            sizeOptions.innerHTML =
-              sizes
-                .map(
-                  size => `
-                    <button
-                      type="button"
-                      class="option-btn size-btn ${
-                        selectedSize === size
-                          ? 'selected'
-                          : ''
-                      }"
-                      data-size="${size}"
-                    >
-                      ${size}
-                    </button>
-                  `
-                )
-                .join('');
-          }
-
-
-          if (colorOptions) {
-
-            colorOptions.innerHTML =
-              colors
-                .map(
-                  color => `
-                    <button
-                      type="button"
-                      class="option-btn color-btn ${
-                        selectedColor === color
-                          ? 'selected'
-                          : ''
-                      }"
-                      data-color="${color}"
-                    >
-                      ${color}
-                    </button>
-                  `
-                )
-                .join('');
-          }
-
-
-          /*
-           * Find the exact variant.
-           *
-           * If the product has both size and color,
-           * require both to be selected.
-           */
-
-          const requiresSize =
-            sizes.length > 0;
-
-          const requiresColor =
-            colors.length > 0;
-
-          const hasRequiredSize =
-            !requiresSize ||
-            Boolean(selectedSize);
-
-          const hasRequiredColor =
-            !requiresColor ||
-            Boolean(selectedColor);
-
-
-          if (
-            hasRequiredSize &&
-            hasRequiredColor
-          ) {
-
-            const match =
-              variants.find(variant => {
-
-                const sizeMatches =
-                  !requiresSize ||
-                  variant.size === selectedSize;
-
-                const colorMatches =
-                  !requiresColor ||
-                  variant.color === selectedColor;
-
-                return (
-                  sizeMatches &&
-                  colorMatches
-                );
-              });
-
-            selectedVariantId =
-              match?.id ?? null;
-
-          } else {
-
-            selectedVariantId = null;
-          }
-
-
-          const addButton =
-            root.querySelector(
-              '.add-to-cart'
-            ) as HTMLButtonElement | null;
-
-          if (!addButton) return;
-
-
-          if (
-            !requiresSize &&
-            !requiresColor
-          ) {
-
-            addButton.disabled = false;
-            addButton.textContent =
-              'Add to cart';
-
-          } else if (
-            selectedVariantId !== null
-          ) {
-
-            addButton.disabled = false;
-            addButton.textContent =
-              'Add to cart';
-
-          } else {
-
-            addButton.disabled = true;
-            addButton.textContent =
-              'Select options first';
-          }
-        }
-
-
-        /* ================================
-           Size Selection
-        ================================= */
-
-        sizeOptions?.addEventListener(
-          'click',
-          event => {
-
-            const target =
-              event.target as HTMLElement;
-
-            const button =
-              target.closest(
-                '.size-btn'
-              ) as HTMLElement | null;
-
-            if (!button) return;
-
-            selectedSize =
-              button.dataset.size || null;
-
-            renderOptions();
-          }
-        );
-
-
-        /* ================================
-           Color Selection
-        ================================= */
-
-        colorOptions?.addEventListener(
-          'click',
-          event => {
-
-            const target =
-              event.target as HTMLElement;
-
-            const button =
-              target.closest(
-                '.color-btn'
-              ) as HTMLElement | null;
-
-            if (!button) return;
-
-            selectedColor =
-              button.dataset.color || null;
-
-            renderOptions();
-          }
-        );
-
-
-        renderOptions();
-
-
-        /* ================================
-           Detail Add To Cart
-        ================================= */
-
-        detailAddToCartButton?.addEventListener(
-          'click',
-          async () => {
-
-            const id =
-              root.dataset.id;
-
-            const name =
-              root.dataset.name;
-
-            const price =
-              Number(root.dataset.price);
-
-            const image =
-              root.dataset.image || '';
-
-
-            if (
-              !id ||
-              !name ||
-              !Number.isFinite(price) ||
-              price <= 0
-            ) {
-
-              showToast(
-                'Invalid product information'
-              );
-
-              return;
-            }
-
-
-            if (
-              (sizes.length > 0 ||
-                colors.length > 0) &&
-              selectedVariantId === null
-            ) {
-
-              showToast(
-                'Please select your options'
-              );
-
-              return;
-            }
-
-
-            const input: AddToCartInput = {
-              id: String(id),
-              name,
-              price,
-              image,
-              variantId:
-                selectedVariantId ??
-                undefined
-            };
-
-
-            const button =
-              detailAddToCartButton;
-
-            if (!button) return;
-
-            button.disabled = true;
-            button.textContent = 'Adding...';
-
-
-            try {
-
-              console.log(
-                'Adding detail product:',
-                input
-              );
-
-              await addToCart(input);
-
-              showToast(
-                `${name} added to cart`
-              );
-
-              setCartButtonLabel(button);
-
-            } catch (error) {
-
-              console.error(
-                'Failed to add detail product:',
-                error
-              );
-
-              button.disabled = false;
-              button.textContent =
-                'Add to cart';
-
-              showToast(
-                'Could not add product to cart'
-              );
-            }
-          }
-        );
-      }
-    )
-
-    .catch(error => {
-
-      console.error(
-        'Failed to load variants:',
-        error
-      );
-
-      /*
-       * If variants cannot be loaded,
-       * allow normal products to be added.
-       */
-
-      const button =
-        root.querySelector(
-          '.add-to-cart'
-        ) as HTMLButtonElement | null;
-
-      if (!button) return;
-
-      button.disabled = false;
-      button.textContent =
-        'Add to cart';
-
-
-      button.addEventListener(
-        'click',
-        async () => {
-
-          const id =
-            root.dataset.id;
-
-          const name =
-            root.dataset.name;
-
-          const price =
-            Number(root.dataset.price);
-
-          const image =
-            root.dataset.image || '';
-
-
-          if (
-            !id ||
-            !name ||
-            !Number.isFinite(price) ||
-            price <= 0
-          ) {
-
-            showToast(
-              'Invalid product information'
-            );
-
-            return;
-          }
-
-
-          button.disabled = true;
-          button.textContent =
-            'Adding...';
-
-
-          try {
-
-            await addToCart({
-              id: String(id),
-              name,
-              price,
-              image
-            });
-
-            showToast(
-              `${name} added to cart`
-            );
-
-            setCartButtonLabel(button);
-
-          } catch (error) {
-
-            console.error(
-              'Add to cart failed:',
-              error
-            );
-
-            button.disabled = false;
-            button.textContent =
-              'Add to cart';
-
-            showToast(
-              'Could not add product to cart'
-            );
-          }
-        }
-      );
-    });
+  void loadVariantOptions(root, product);
 }
+
+interface VariantOptionState {
+  sizes: string[];
+  colors: string[];
+  selectedSize: string | null;
+  selectedColor: string | null;
+  selectedVariantId: number | null;
+}
+
+async function loadVariantOptions(root: HTMLElement, product: Product): Promise<void> {
+  const addButton = root.querySelector<HTMLButtonElement>('.add-to-cart');
+  const sizeOptions = root.querySelector<HTMLElement>('#size-options');
+  const colorOptions = root.querySelector<HTMLElement>('#color-options');
+
+  let variants: ProductVariant[] = [];
+  try {
+    variants = await api.products.variants(product.id);
+    if (!Array.isArray(variants)) variants = [];
+  } catch (error) {
+    console.error('Failed to load variants:', error);
+  }
+
+  const sizes = uniqueValues(variants.map((v) => v.size));
+  const colors = uniqueValues(variants.map((v) => v.color));
+
+  const state: VariantOptionState = {
+    sizes,
+    colors,
+    selectedSize: null,
+    selectedColor: null,
+    selectedVariantId: null,
+  };
+
+  function renderOptions(): void {
+    if (sizeOptions) {
+      sizeOptions.innerHTML = state.sizes
+        .map((size) => optionButton('size-btn', size, state.selectedSize, variants))
+        .join('');
+    }
+    if (colorOptions) {
+      colorOptions.innerHTML = state.colors
+        .map((color) => optionButton('color-btn', color, state.selectedColor, variants))
+        .join('');
+    }
+
+    const requiresSize = state.sizes.length > 0;
+    const requiresColor = state.colors.length > 0;
+
+    state.selectedVariantId =
+      (!requiresSize || state.selectedSize) && (!requiresColor || state.selectedColor)
+        ? findVariant(variants, state)?.id ?? null
+        : null;
+
+    if (!addButton) return;
+
+    if (!requiresSize && !requiresColor) {
+      addButton.disabled = false;
+      addButton.textContent = 'Add to cart';
+    } else if (state.selectedVariantId !== null) {
+      const variant = variants.find((v) => v.id === state.selectedVariantId);
+      const stock = Number(variant?.stock ?? 0);
+      addButton.disabled = stock <= 0;
+      addButton.textContent = stock <= 0 ? 'Sold out' : 'Add to cart';
+    } else {
+      addButton.disabled = true;
+      addButton.textContent = 'Select options first';
+    }
+  }
+
+  sizeOptions?.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLElement>('.size-btn');
+    if (!button) return;
+    state.selectedSize = button.dataset.value ?? null;
+    renderOptions();
+  });
+
+  colorOptions?.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLElement>('.color-btn');
+    if (!button) return;
+    state.selectedColor = button.dataset.value ?? null;
+    renderOptions();
+  });
+
+  renderOptions();
+
+  addButton?.addEventListener('click', async () => {
+    if (!addButton || addButton.disabled) return;
+
+    if ((sizes.length > 0 || colors.length > 0) && state.selectedVariantId === null) {
+      showToast('Please select your options');
+      return;
+    }
+
+    const id = root.dataset.id;
+    const name = root.dataset.name;
+    const price = Number(root.dataset.price);
+    const image = root.dataset.image ?? '';
+
+    if (!id || !name || !Number.isFinite(price) || price <= 0) {
+      showToast('Invalid product information');
+      return;
+    }
+
+    const variant = variants.find((v) => v.id === state.selectedVariantId);
+
+    addButton.disabled = true;
+    addButton.textContent = 'Adding…';
+
+    try {
+      await addToCart({
+        id,
+        name,
+        price,
+        image,
+        variantId: state.selectedVariantId ?? undefined,
+        size: variant?.size ?? undefined,
+        color: variant?.color ?? undefined,
+      });
+      showToast(`${name} added to cart`);
+      flashAdded(addButton);
+      openCart();
+    } catch (error) {
+      console.error('Failed to add product to cart:', error);
+      addButton.disabled = false;
+      addButton.textContent = 'Add to cart';
+      showToast(errorMessage(error, 'Could not add product to cart'));
+    }
+  });
+}
+
+function optionButton(
+  className: string,
+  value: string,
+  selected: string | null,
+  variants: ProductVariant[]
+): string {
+  const soldOut = !variants.some(
+    (v) => (v.size === value || v.color === value) && Number(v.stock) > 0
+  );
+  return `
+    <button
+      type="button"
+      class="option-btn ${className}${selected === value ? ' selected' : ''}${soldOut ? ' sold-out' : ''}"
+      data-value="${escapeAttr(value)}"
+      ${soldOut ? 'disabled aria-disabled="true"' : ''}
+      title="${soldOut ? 'Sold out' : escapeAttr(value)}"
+    >${escapeHtml(value)}</button>
+  `;
+}
+
+function findVariant(variants: ProductVariant[], state: VariantOptionState): ProductVariant | undefined {
+  return variants.find((v) => {
+    const sizeOk = state.sizes.length === 0 || v.size === state.selectedSize;
+    const colorOk = state.colors.length === 0 || v.color === state.selectedColor;
+    return sizeOk && colorOk;
+  });
+}
+
+function uniqueValues(values: Array<string | null>): string[] {
+  return [...new Set(values.filter((v): v is string => Boolean(v)))];
+}
+
+export { syncWishlistButtons };

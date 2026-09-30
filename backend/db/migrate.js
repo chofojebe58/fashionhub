@@ -1,16 +1,11 @@
-import Database from 'better-sqlite3';
-import { resolve } from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { db } from '../db.js';
 
-const __dirname = resolve(fileURLToPath(import.meta.url), '..');
-const dbPath = resolve(__dirname, '..', 'fashionhub.db');
-const migrationsDir = resolve(__dirname, 'migrations');
+const here = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = resolve(here, 'migrations');
 
-const db = new Database(dbPath);
-db.pragma('foreign_keys = ON');
-
-// Create migrations tracking table
 db.exec(`
   CREATE TABLE IF NOT EXISTS migrations (
     id TEXT PRIMARY KEY,
@@ -18,47 +13,49 @@ db.exec(`
   );
 `);
 
-function getAppliedMigrations() {
-  return db.prepare('SELECT id FROM migrations ORDER BY applied_at').all().map(r => r.id);
-}
+const applied = () => new Set(db.prepare('SELECT id FROM migrations').all().map((r) => r.id));
 
-function getPendingMigrations(applied) {
-  const files = fs.readdirSync(migrationsDir)
-    .filter(f => f.endsWith('.js'))
-    .sort();
-  return files.filter(f => !applied.includes(f.replace('.js', '')));
-}
+const pendingFiles = () => {
+  const done = applied();
+  return fs
+    .readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.js'))
+    .sort()
+    .filter((f) => !done.has(f.replace(/\.js$/, '')));
+};
 
 async function runMigration(filename) {
-  const migration = await import(`file://${resolve(migrationsDir, filename)}`);
-  if (typeof migration.up === 'function') {
-    migration.up(db);
-  } else if (typeof migration.default === 'function') {
-    migration.default(db);
-  }
-  db.prepare('INSERT INTO migrations (id) VALUES (?)').run(filename.replace('.js', ''));
-  console.log(`Applied migration: ${filename}`);
+  const mod = await import(`file://${resolve(migrationsDir, filename)}`);
+  const up = mod.up ?? mod.default;
+  if (typeof up !== 'function') throw new Error(`${filename} exports no up()`);
+
+  // Each migration runs in its own transaction so a failure leaves no partial state.
+  const apply = db.transaction(() => {
+    up(db);
+    db.prepare('INSERT INTO migrations (id) VALUES (?)').run(filename.replace(/\.js$/, ''));
+  });
+  apply();
+  console.log(`  ✓ ${filename}`);
 }
 
-async function main() {
-  const applied = getAppliedMigrations();
-  const pending = getPendingMigrations(applied);
-
-  if (pending.length === 0) {
+export async function runMigrations() {
+  const pending = pendingFiles();
+  if (!pending.length) {
     console.log('No pending migrations');
-  } else {
-    console.log(`Running ${pending.length} migration(s)...`);
-    for (const migration of pending) {
-      await runMigration(migration);
-    }
-    console.log('All migrations applied');
+    return 0;
   }
-
-  db.close();
+  console.log(`Running ${pending.length} migration(s)…`);
+  for (const file of pending) await runMigration(file);
+  console.log('All migrations applied');
+  return pending.length;
 }
 
-main().catch(err => {
-  console.error('Migration failed:', err);
-  db.close();
-  process.exit(1);
-});
+const isDirectRun = process.argv[1] && resolve(process.argv[1]) === resolve(here, 'migrate.js');
+if (isDirectRun) {
+  runMigrations()
+    .catch((err) => {
+      console.error('Migration failed:', err);
+      process.exitCode = 1;
+    })
+    .finally(() => db.close());
+}

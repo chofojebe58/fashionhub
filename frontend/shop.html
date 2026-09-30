@@ -10,9 +10,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="src/styles/main.css" />
+    <link rel="stylesheet" href="/src/styles/main.css" />
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to products</a>
+
     <div class="page-shell">
       <div class="container">
         <header class="topbar">
@@ -25,15 +27,17 @@
               <a href="lookbook.html">Journal</a>
             </nav>
           </div>
+          <div class="account-slot" data-account-slot></div>
           <button class="cart-toggle" type="button" aria-label="Open cart" aria-expanded="false" aria-controls="cart-panel">
             <span>Cart</span>
             <span class="cart-count">0</span>
           </button>
         </header>
 
-        <aside id="cart-panel" class="cart-panel" aria-live="polite">
+        <aside id="cart-panel" class="cart-panel" role="dialog" aria-modal="false"
+          aria-hidden="true" aria-labelledby="cart-title" aria-live="polite">
           <div class="cart-header">
-            <h3>Your Cart</h3>
+            <h3 id="cart-title">Your Cart</h3>
             <button class="close-cart" type="button" aria-label="Close cart">×</button>
           </div>
           <ul class="cart-items">
@@ -48,7 +52,7 @@
           </div>
         </aside>
 
-        <main>
+        <main id="main">
           <section class="shop-hero">
             <div class="shop-hero-copy">
               <p class="eyebrow">Curated edits</p>
@@ -69,13 +73,14 @@
               </svg>
               <input type="search" id="search-input" placeholder="Search products..." aria-label="Search products" />
             </div>
-            <div class="filters-toggle" id="filters-toggle">
+            <button class="filters-toggle" id="filters-toggle" type="button"
+              aria-expanded="false" aria-controls="filters-panel">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <path d="M3 3h18v18H3z"></path>
                 <path d="M9 9h6v6H9z"></path>
               </svg>
               <span>Filters</span>
-            </div>
+            </button>
             <div class="sort-select-wrapper">
               <select id="sort-by" aria-label="Sort products">
                 <option value="name">Sort by name</option>
@@ -107,7 +112,19 @@
                   </label>
                 </div>
               </fieldset>
-              <button class="btn btn-light" id="clear-filters">Clear all filters</button>
+              <fieldset class="filter-group">
+                <legend>Availability</legend>
+                <label class="filter-option">
+                  <input type="checkbox" id="in-stock" />
+                  <span>In stock only</span>
+                </label>
+                <label class="filter-option">
+                  <input type="checkbox" id="on-sale" />
+                  <span>On sale</span>
+                </label>
+              </fieldset>
+
+              <button class="btn btn-light" id="clear-filters" type="button">Clear all filters</button>
             </div>
           </aside>
 
@@ -155,12 +172,12 @@
 
           <section class="product-grid product-wrap">
             <article class="product-card" data-product-id="linen-blend-blazer" data-name="Linen Blend Blazer" data-price="89.99" data-image="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=700&q=80">
-              <a class="product-image-link" href="product.html?id=linen-blend-blazer">
-                <div class="product-image">
+              <div class="product-image">
+                <a class="product-image-link" href="product.html?id=linen-blend-blazer" aria-label="View Linen Blend Blazer">
                   <img src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=700&q=80" alt="Linen blend blazer" />
-                  <span class="wishlist">♡</span>
-                </div>
-              </a>
+                </a>
+                <button type="button" class="wishlist" data-product-id="linen-blend-blazer" aria-pressed="false" aria-label="Save Linen Blend Blazer to wishlist">♡</button>
+              </div>
               <div class="product-info">
                 <a class="product-name-link" href="product.html?id=linen-blend-blazer"><h3 class="product-name">Linen Blend Blazer</h3></a>
                 <div class="price-line">
@@ -172,12 +189,12 @@
             </article>
 
             <article class="product-card" data-product-id="ribbed-knit-top" data-name="Ribbed Knit Top" data-price="25.99" data-image="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=700&q=80">
-              <a class="product-image-link" href="product.html?id=ribbed-knit-top">
-                <div class="product-image">
+              <div class="product-image">
+                <a class="product-image-link" href="product.html?id=ribbed-knit-top" aria-label="View Ribbed Knit Top">
                   <img src="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=700&q=80" alt="Ribbed knit top" />
-                  <span class="wishlist">♡</span>
-                </div>
-              </a>
+                </a>
+                <button type="button" class="wishlist" data-product-id="ribbed-knit-top" aria-pressed="false" aria-label="Save Ribbed Knit Top to wishlist">♡</button>
+              </div>
               <div class="product-info">
                 <a class="product-name-link" href="product.html?id=ribbed-knit-top"><h3 class="product-name">Ribbed Knit Top</h3></a>
                 <div class="price-line">
@@ -189,12 +206,12 @@
             </article>
 
             <article class="product-card" data-product-id="wide-leg-trousers" data-name="Wide Leg Trousers" data-price="59.99" data-image="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=700&q=80">
-              <a class="product-image-link" href="product.html?id=wide-leg-trousers">
-                <div class="product-image">
+              <div class="product-image">
+                <a class="product-image-link" href="product.html?id=wide-leg-trousers" aria-label="View Wide Leg Trousers">
                   <img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=700&q=80" alt="Wide leg trousers" />
-                  <span class="wishlist">♡</span>
-                </div>
-              </a>
+                </a>
+                <button type="button" class="wishlist" data-product-id="wide-leg-trousers" aria-pressed="false" aria-label="Save Wide Leg Trousers to wishlist">♡</button>
+              </div>
               <div class="product-info">
                 <a class="product-name-link" href="product.html?id=wide-leg-trousers"><h3 class="product-name">Wide Leg Trousers</h3></a>
                 <div class="price-line">
@@ -206,12 +223,12 @@
             </article>
 
             <article class="product-card" data-product-id="leather-shoulder-bag" data-name="Leather Shoulder Bag" data-price="79.99" data-image="https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=700&q=80">
-              <a class="product-image-link" href="product.html?id=leather-shoulder-bag">
-                <div class="product-image">
+              <div class="product-image">
+                <a class="product-image-link" href="product.html?id=leather-shoulder-bag" aria-label="View Leather Shoulder Bag">
                   <img src="https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=700&q=80" alt="Leather shoulder bag" />
-                  <span class="wishlist">♡</span>
-                </div>
-              </a>
+                </a>
+                <button type="button" class="wishlist" data-product-id="leather-shoulder-bag" aria-pressed="false" aria-label="Save Leather Shoulder Bag to wishlist">♡</button>
+              </div>
               <div class="product-info">
                 <a class="product-name-link" href="product.html?id=leather-shoulder-bag"><h3 class="product-name">Leather Shoulder Bag</h3></a>
                 <div class="price-line">
@@ -223,12 +240,12 @@
             </article>
 
             <article class="product-card" data-product-id="minimalist-strappy-heels" data-name="Minimalist Strappy Heels" data-price="49.99" data-image="https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=700&q=80">
-              <a class="product-image-link" href="product.html?id=minimalist-strappy-heels">
-                <div class="product-image">
+              <div class="product-image">
+                <a class="product-image-link" href="product.html?id=minimalist-strappy-heels" aria-label="View Minimalist Strappy Heels">
                   <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=700&q=80" alt="Minimalist strappy heels" />
-                  <span class="wishlist">♡</span>
-                </div>
-              </a>
+                </a>
+                <button type="button" class="wishlist" data-product-id="minimalist-strappy-heels" aria-pressed="false" aria-label="Save Minimalist Strappy Heels to wishlist">♡</button>
+              </div>
               <div class="product-info">
                 <a class="product-name-link" href="product.html?id=minimalist-strappy-heels"><h3 class="product-name">Minimalist Strappy Heels</h3></a>
                 <div class="price-line">

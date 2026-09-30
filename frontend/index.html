@@ -5,15 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FashionHub</title>
     <meta name="description" content="FashionHub — timeless pieces crafted for comfort and designed for everyday elegance. Explore new collections, curated picks, and exclusive offers." />
-    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="src/styles/main.css" />
+    <link rel="stylesheet" href="/src/styles/main.css" />
     <link rel="manifest" href="manifest.json" />
     <link rel="preload" as="image" href="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80" />
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="announcement-bar" data-setting="announcement"
+      data-setting-hide-when-empty="true" role="status" hidden></div>
+
     <div class="page-shell">
       <div class="container">
         <header class="topbar">
@@ -42,6 +47,7 @@
     aria-label="Search products"
   >
 </form>
+          <div class="account-slot" data-account-slot></div>
           <button class="cart-toggle" type="button" aria-label="Open cart" aria-expanded="false" aria-controls="cart-panel">
             <span>Cart</span>
             <span class="cart-count">0</span>
@@ -65,40 +71,44 @@
           </div>
         </aside>
 
-        <main>
+        <main id="main">
           <section class="hero">
             <div class="hero-copy">
-              <div class="eyebrow">New Collection</div>
-              <h1>Elevate Your Everyday Style</h1>
-              <div class="subtitle">
+              <div class="eyebrow" data-setting="heroEyebrow">New Collection</div>
+              <h1 data-setting="heroTitle">Elevate Your Everyday Style</h1>
+              <div class="subtitle" data-setting="heroSubtitle">
                 Discover timeless pieces crafted for comfort, designed for elegance, made for you.
               </div>
 
               <div class="cta-row">
-                <a href="shop.html" class="btn btn-primary">Shop Now →</a>
-                <a href="lookbook.html" class="btn btn-light">▶ Watch Lookbook</a>
+                <a href="shop.html" class="btn btn-primary"
+                  data-setting="heroCtaPrimaryLabel"
+                  data-setting-href="heroCtaPrimaryHref">Shop Now →</a>
+                <a href="lookbook.html" class="btn btn-light"
+                  data-setting="heroCtaSecondaryLabel"
+                  data-setting-href="heroCtaSecondaryHref">▶ Watch Lookbook</a>
               </div>
 
               <div class="mini-features">
                 <div class="feature-item">
                   <div class="feature-icon">◌</div>
                   <div class="feature-copy">
-                    <strong>Free Shipping</strong>
-                    <span>On orders over $99</span>
+                    <strong data-setting="feature1Title">Free Shipping</strong>
+                    <span data-setting="feature1Text">On orders over $99</span>
                   </div>
                 </div>
                 <div class="feature-item">
                   <div class="feature-icon">↺</div>
                   <div class="feature-copy">
-                    <strong>Easy Returns</strong>
-                    <span>30-day returns</span>
+                    <strong data-setting="feature2Title">Easy Returns</strong>
+                    <span data-setting="feature2Text">30-day returns</span>
                   </div>
                 </div>
                 <div class="feature-item">
                   <div class="feature-icon">✓</div>
                   <div class="feature-copy">
-                    <strong>Secure Payment</strong>
-                    <span>100% protected</span>
+                    <strong data-setting="feature3Title">Secure Payment</strong>
+                    <span data-setting="feature3Text">100% protected</span>
                   </div>
                 </div>
               </div>
@@ -106,7 +116,8 @@
 
             <div class="hero-media">
                 <div class="portrait">
-                <img src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80" alt="Fashion model in neutral blazer" width="900" height="630" loading="eager" decoding="sync" />
+                <img src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80" alt="Fashion model in neutral blazer" width="900" height="630" loading="eager" decoding="sync"
+                  data-setting-src="heroImage" data-setting-alt="heroImageAlt" />
               </div>
               <div class="hero-rail">
                 <span>01</span>
@@ -228,21 +239,23 @@
           </section>
 
           <div class="section-header" id="featured-products">
-            <h2 class="section-title">Our Most Loved Picks</h2>
-            <a href="shop.html#featured" class="link-more">
+            <h2 class="section-title" data-setting="featuredSectionTitle">Our Most Loved Picks</h2>
+            <a href="shop.html#featured" class="link-more"
+              data-setting="featuredSectionLinkLabel"
+              data-setting-href="featuredSectionLinkHref">
               View All Products
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
             </a>
           </div>
 
-          <section class="product-grid product-wrap" id="featured">
+          <section class="product-grid product-wrap" id="featured" data-featured-only="true">
             <article class="product-card" data-product-id="linen-blend-blazer" data-name="Linen Blend Blazer" data-price="89.99" data-image="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=700&q=80">
-              <a class="product-image-link" href="product.html?id=linen-blend-blazer" aria-label="View Linen Blend Blazer">
-                <div class="product-image">
+              <div class="product-image">
+                <a class="product-image-link" href="product.html?id=linen-blend-blazer" aria-label="View Linen Blend Blazer">
                   <img src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=700&q=80" alt="Linen blend blazer" />
-                  <span class="wishlist">♡</span>
-                </div>
-              </a>
+                </a>
+                <button type="button" class="wishlist" data-product-id="linen-blend-blazer" aria-pressed="false" aria-label="Save Linen Blend Blazer to wishlist">♡</button>
+              </div>
               <div class="product-info">
                 <a class="product-name-link" href="product.html?id=linen-blend-blazer"><h3 class="product-name">Linen Blend Blazer</h3></a>
                 <div class="price-line">
@@ -258,12 +271,12 @@
             </article>
 
             <article class="product-card" data-product-id="ribbed-knit-top" data-name="Ribbed Knit Top" data-price="25.99" data-image="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=700&q=80">
-              <a class="product-image-link" href="product.html?id=ribbed-knit-top" aria-label="View Ribbed Knit Top">
-                <div class="product-image">
+              <div class="product-image">
+                <a class="product-image-link" href="product.html?id=ribbed-knit-top" aria-label="View Ribbed Knit Top">
                   <img src="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=700&q=80" alt="Ribbed knit top" />
-                  <span class="wishlist">♡</span>
-                </div>
-              </a>
+                </a>
+                <button type="button" class="wishlist" data-product-id="ribbed-knit-top" aria-pressed="false" aria-label="Save Ribbed Knit Top to wishlist">♡</button>
+              </div>
               <div class="product-info">
                 <a class="product-name-link" href="product.html?id=ribbed-knit-top"><h3 class="product-name">Ribbed Knit Top</h3></a>
                 <div class="price-line">
@@ -279,12 +292,12 @@
             </article>
 
             <article class="product-card" data-product-id="wide-leg-trousers" data-name="Wide Leg Trousers" data-price="59.99" data-image="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=700&q=80">
-              <a class="product-image-link" href="product.html?id=wide-leg-trousers" aria-label="View Wide Leg Trousers">
-                <div class="product-image">
+              <div class="product-image">
+                <a class="product-image-link" href="product.html?id=wide-leg-trousers" aria-label="View Wide Leg Trousers">
                   <img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=700&q=80" alt="Wide leg trousers" />
-                  <span class="wishlist">♡</span>
-                </div>
-              </a>
+                </a>
+                <button type="button" class="wishlist" data-product-id="wide-leg-trousers" aria-pressed="false" aria-label="Save Wide Leg Trousers to wishlist">♡</button>
+              </div>
               <div class="product-info">
                 <a class="product-name-link" href="product.html?id=wide-leg-trousers"><h3 class="product-name">Wide Leg Trousers</h3></a>
                 <div class="price-line">
@@ -300,12 +313,12 @@
             </article>
 
             <article class="product-card" data-product-id="leather-shoulder-bag" data-name="Leather Shoulder Bag" data-price="79.99" data-image="https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=700&q=80">
-              <a class="product-image-link" href="product.html?id=leather-shoulder-bag" aria-label="View Leather Shoulder Bag">
-                <div class="product-image">
+              <div class="product-image">
+                <a class="product-image-link" href="product.html?id=leather-shoulder-bag" aria-label="View Leather Shoulder Bag">
                   <img src="https://i.pinimg.com/736x/ee/57/46/ee57464274c81f8b4493292ecf30c3af.jpg" alt="Leather shoulder bag" />
-                  <span class="wishlist">♡</span>
-                </div>
-              </a>
+                </a>
+                <button type="button" class="wishlist" data-product-id="leather-shoulder-bag" aria-pressed="false" aria-label="Save Leather Shoulder Bag to wishlist">♡</button>
+              </div>
               <div class="product-info">
                 <a class="product-name-link" href="product.html?id=leather-shoulder-bag"><h3 class="product-name">Leather Shoulder Bag</h3></a>
                 <div class="price-line">
@@ -322,12 +335,12 @@
             </article>
 
             <article class="product-card" data-product-id="minimalist-strappy-heels" data-name="Minimalist Strappy Heels" data-price="49.99" data-image="https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=700&q=80">
-              <a class="product-image-link" href="product.html?id=minimalist-strappy-heels" aria-label="View Minimalist Strappy Heels">
-                <div class="product-image">
+              <div class="product-image">
+                <a class="product-image-link" href="product.html?id=minimalist-strappy-heels" aria-label="View Minimalist Strappy Heels">
                   <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=700&q=80" alt="Minimalist straps heels" />
-                  <span class="wishlist">♡</span>
-                </div>
-              </a>
+                </a>
+                <button type="button" class="wishlist" data-product-id="minimalist-strappy-heels" aria-pressed="false" aria-label="Save Minimalist Strappy Heels to wishlist">♡</button>
+              </div>
               <div class="product-info">
                 <a class="product-name-link" href="product.html?id=minimalist-strappy-heels"><h3 class="product-name">Minimalist Strappy Heels</h3></a>
                 <div class="price-line">
@@ -381,11 +394,19 @@
               </div>
 
               <div class="newsletter-content">
-                <div class="newsletter-kicker">Get 10% off your first order</div>
-                <h2>Join Our Style List</h2>
-                <p>Sign up for exclusive offers, new arrivals, and style inspiration.</p>
-                <form class="subscribe-form">
-                  <input type="email" aria-label="Your email" placeholder="Enter your email" />
+                <div class="newsletter-kicker" data-setting="newsletterKicker">Get 10% off your first order</div>
+                <h2 data-setting="newsletterTitle">Join Our Style List</h2>
+                <p data-setting="newsletterText">Sign up for exclusive offers, new arrivals, and style inspiration.</p>
+                <form class="subscribe-form" novalidate>
+                  <label class="visually-hidden" for="newsletter-email">Email address</label>
+                  <input
+                    type="email"
+                    id="newsletter-email"
+                    name="email"
+                    placeholder="Enter your email"
+                    autocomplete="email"
+                    required
+                  />
                   <button type="submit">Subscribe</button>
                 </form>
               </div>
@@ -399,7 +420,7 @@
       <div class="container footer-grid">
         <div class="footer-col">
           <div class="brand-foot">LUNORA</div>
-          <div class="footer-copy">Timeless fashion for every mood, crafted with care and designed for everyday elegance.</div>
+          <div class="footer-copy" data-setting="footerBlurb">Timeless fashion for every mood, crafted with care and designed for everyday elegance.</div>
           <div class="socials">
             <a href="#">◎</a>
             <a href="#">f</a>
@@ -445,10 +466,18 @@
         <div class="footer-col">
           <h4>Stay Connected</h4>
           <div class="footer-copy">Sign up for updates and get 10% off your first order.</div>
-          <div class="footer-email">
-            <input type="email" placeholder="Enter your email" aria-label="Footer email" />
-            <span>→</span>
-          </div>
+          <form class="footer-email" novalidate>
+            <label class="visually-hidden" for="footer-email-input">Email address</label>
+            <input
+              type="email"
+              id="footer-email-input"
+              name="email"
+              placeholder="Enter your email"
+              autocomplete="email"
+              required
+            />
+            <button type="submit" aria-label="Subscribe">→</button>
+          </form>
         </div>
       </div>
     </footer>

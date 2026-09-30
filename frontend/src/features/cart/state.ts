@@ -1,26 +1,7 @@
 import { api } from '@api/client.ts';
 import { loadCart, saveCart } from '@utils/storage.ts';
-import type { CartItem } from '@app-types/cart.ts';
-
-interface ApiCartItem {
-  id: number;
-  product_id: string;
-  variant_id: number | null;
-  quantity: number;
-  name: string;
-  price: number;
-  image: string;
-  old_price: number | null;
-  size: string | null;
-  color: string | null;
-  sku: string | null;
-}
-
-interface ApiCartResponse {
-  items: ApiCartItem[];
-  total: number;
-  count: number;
-}
+import { priceItems, type CartTotals } from '@utils/pricing.ts';
+import type { CartItem, CartResponse } from '@app-types/cart.ts';
 
 export interface AddToCartInput {
   id: string;
@@ -32,59 +13,100 @@ export interface AddToCartInput {
   color?: string;
 }
 
-let cart: CartItem[] = [];
-let listeners: Array<(cart: CartItem[]) => void> = [];
+let items: CartItem[] = [];
+let totals: CartTotals = priceItems([]);
+let listeners: Array<() => void> = [];
 let isLoading = false;
+/** True once the API has failed; the cart then lives in localStorage only. */
 let useLocalFallback = false;
 let localIdCounter = 1;
 
-function mapApiItem(item: ApiCartItem): CartItem {
+function normalizeItem(item: CartItem): CartItem {
   return {
-    id: item.id,
-    productId: item.product_id,
-    name: item.name,
+    ...item,
+    id: Number(item.id),
     price: Number(item.price),
-    image: item.image,
     quantity: Number(item.quantity),
-    variantId: item.variant_id ?? undefined,
-    size: item.size ?? undefined,
-    color: item.color ?? undefined,
+    image: item.image ?? '',
   };
 }
 
 function notify(): void {
-  listeners.forEach(fn => fn(cart));
+  listeners.forEach((fn) => fn());
+}
+
+function applyApiCart(data: CartResponse): void {
+  items = (data.items ?? []).map(normalizeItem);
+  totals = {
+    count: Number(data.count ?? 0),
+    subtotal: Number(data.subtotal ?? 0),
+    shipping: Number(data.shipping ?? 0),
+    tax: Number(data.tax ?? 0),
+    total: Number(data.total ?? 0),
+    currency: data.currency ?? 'USD',
+    freeShippingThreshold: Number(data.freeShippingThreshold ?? 99),
+  };
+}
+
+function recomputeLocalTotals(): void {
+  totals = priceItems(items);
 }
 
 function persistLocalCart(): void {
-  saveCart(cart);
+  saveCart(items);
+  recomputeLocalTotals();
 }
 
 function nextLocalId(): number {
-  const maxId = cart.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+  const maxId = items.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
   localIdCounter = Math.max(localIdCounter, maxId + 1);
   return localIdCounter++;
 }
 
+/* --- Selectors ---------------------------------------------------------- */
+
 export function getCart(): CartItem[] {
-  return cart;
+  return items;
+}
+
+export function getTotals(): CartTotals {
+  return totals;
+}
+
+export function getCartTotal(): number {
+  return totals.total;
+}
+
+/** Subtotal only — the drawer shows this, checkout shows the full breakdown. */
+export function getCartSubtotal(): number {
+  return totals.subtotal;
+}
+
+export function getCartCount(): number {
+  return totals.count;
 }
 
 export function isCartLoading(): boolean {
   return isLoading;
 }
 
-export function subscribe(fn: (cart: CartItem[]) => void): () => void {
-  listeners.push(fn);
+export function isOfflineCart(): boolean {
+  return useLocalFallback;
+}
 
+export function subscribe(fn: () => void): () => void {
+  listeners.push(fn);
   return () => {
-    listeners = listeners.filter(listener => listener !== fn);
+    listeners = listeners.filter((listener) => listener !== fn);
   };
 }
 
-async function fetchAndRender(): Promise<void> {
+/* --- Loading ------------------------------------------------------------- */
+
+async function refresh(): Promise<void> {
   if (useLocalFallback) {
-    cart = loadCart();
+    items = loadCart();
+    recomputeLocalTotals();
     notify();
     return;
   }
@@ -93,14 +115,13 @@ async function fetchAndRender(): Promise<void> {
     isLoading = true;
     notify();
 
-    const data = (await api.cart.get()) as ApiCartResponse;
-    cart = data.items.map(mapApiItem);
-    useLocalFallback = false;
+    applyApiCart(await api.cart.get());
     notify();
   } catch (error) {
     console.warn('Cart API unavailable, using local cart:', error);
     useLocalFallback = true;
-    cart = loadCart();
+    items = loadCart();
+    recomputeLocalTotals();
     notify();
   } finally {
     isLoading = false;
@@ -108,17 +129,35 @@ async function fetchAndRender(): Promise<void> {
   }
 }
 
+export async function initCart(): Promise<void> {
+  await refresh();
+}
+
+/** Retry the API after a failure (e.g. when the browser comes back online). */
+export async function retryConnection(): Promise<boolean> {
+  if (!useLocalFallback) return true;
+  try {
+    applyApiCart(await api.cart.get());
+    useLocalFallback = false;
+    notify();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/* --- Mutations ------------------------------------------------------------ */
+
 function addToLocalCart(product: AddToCartInput): void {
-  const existing = cart.find(
-    item =>
-      item.productId === product.id &&
-      (item.variantId ?? undefined) === (product.variantId ?? undefined)
+  const existing = items.find(
+    (item) =>
+      item.productId === product.id && (item.variantId ?? undefined) === (product.variantId ?? undefined)
   );
 
   if (existing) {
     existing.quantity = Number(existing.quantity) + 1;
   } else {
-    cart.push({
+    items.push({
       id: nextLocalId(),
       productId: product.id,
       name: product.name,
@@ -142,98 +181,81 @@ export async function addToCart(product: AddToCartInput): Promise<void> {
   }
 
   try {
-    await api.cart.add({
-      productId: product.id,
-      variantId: product.variantId,
-      quantity: 1,
-    });
-
-    await fetchAndRender();
+    applyApiCart(
+      await api.cart.add({
+        productId: product.id,
+        variantId: product.variantId,
+        quantity: 1,
+      })
+    );
+    notify();
   } catch (error) {
-    console.warn('Add to cart API failed, falling back to local cart:', error);
-    useLocalFallback = true;
-    cart = loadCart();
-    addToLocalCart(product);
+    // A network failure means offline; anything the server rejected (out of
+    // stock, validation) must surface to the caller instead.
+    if (error instanceof TypeError) {
+      console.warn('Add to cart API unreachable, falling back to local cart:', error);
+      useLocalFallback = true;
+      items = loadCart();
+      addToLocalCart(product);
+      return;
+    }
+    throw error;
   }
 }
 
 export async function removeFromCart(itemId: number): Promise<void> {
   if (useLocalFallback) {
-    cart = cart.filter(item => item.id !== itemId);
+    items = items.filter((item) => item.id !== itemId);
     persistLocalCart();
     notify();
     return;
   }
 
-  try {
-    await api.cart.remove(String(itemId));
-    await fetchAndRender();
-  } catch (error) {
-    console.error('Failed to remove cart item:', error);
-    throw error;
-  }
+  await api.cart.remove(String(itemId));
+  await refresh();
 }
 
-export async function updateQuantity(
-  itemId: number,
-  delta: number
-): Promise<void> {
-  const item = cart.find(cartItem => cartItem.id === itemId);
-
+export async function updateQuantity(itemId: number, delta: number): Promise<void> {
+  const item = items.find((cartItem) => cartItem.id === itemId);
   if (!item) return;
 
-  const newQuantity = Number(item.quantity) + delta;
+  const nextQuantity = Number(item.quantity) + delta;
 
-  if (newQuantity <= 0) {
+  if (nextQuantity <= 0) {
     await removeFromCart(itemId);
     return;
   }
 
   if (useLocalFallback) {
-    item.quantity = newQuantity;
+    item.quantity = nextQuantity;
     persistLocalCart();
     notify();
     return;
   }
 
-  try {
-    await api.cart.update(String(itemId), newQuantity);
-    await fetchAndRender();
-  } catch (error) {
-    console.error('Failed to update cart quantity:', error);
-    throw error;
-  }
+  await api.cart.update(String(itemId), nextQuantity);
+  await refresh();
 }
 
 export async function clearCart(): Promise<void> {
-  if (useLocalFallback) {
-    cart = [];
-    persistLocalCart();
-    notify();
-    return;
+  if (!useLocalFallback) {
+    try {
+      await api.cart.clear();
+    } catch (error) {
+      // Still clear locally so the UI never shows a stale cart.
+      console.warn('Could not clear the server cart:', error);
+    }
   }
 
-  try {
-    await api.cart.clear();
-    cart = [];
-    notify();
-  } catch (error) {
-    console.error('Failed to clear cart:', error);
-    throw error;
-  }
+  items = [];
+  saveCart([]);
+  recomputeLocalTotals();
+  notify();
 }
 
-export function getCartTotal(): number {
-  return cart.reduce(
-    (sum, item) => sum + Number(item.price) * Number(item.quantity),
-    0
-  );
-}
-
-export function getCartCount(): number {
-  return cart.reduce((sum, item) => sum + Number(item.quantity), 0);
-}
-
-export async function initCart(): Promise<void> {
-  await fetchAndRender();
+/** Replaces the cart after login so the server-side merge is reflected. */
+export function replaceCart(next: CartItem[]): void {
+  items = next;
+  recomputeLocalTotals();
+  notify();
 }

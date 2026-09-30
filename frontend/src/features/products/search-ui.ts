@@ -1,74 +1,103 @@
 import {
-  subscribe as subscribeFilters,
-  setFilters,
-  resetFilters,
+  getAvailableCategories,
+  getFilteredProducts,
   getFilters,
+  PRICE_BOUNDS,
+  resetFilters,
+  setFilters,
+  subscribe as subscribeFilters,
   type FilterState,
 } from './filters.ts';
-import { renderProductGrid } from './render.ts';
+import { escapeAttr, escapeHtml } from '@utils/escape.ts';
+import type { Product } from '@app-types/product.ts';
 
 let searchInput: HTMLInputElement | null = null;
 let categoryFilters: HTMLFieldSetElement | null = null;
 let priceMinInput: HTMLInputElement | null = null;
 let priceMaxInput: HTMLInputElement | null = null;
+let inStockInput: HTMLInputElement | null = null;
+let onSaleInput: HTMLInputElement | null = null;
 let sortSelect: HTMLSelectElement | null = null;
 let clearFiltersBtn: HTMLButtonElement | null = null;
 let resultsCount: HTMLElement | null = null;
 let filtersToggle: HTMLButtonElement | null = null;
 let filtersPanel: HTMLElement | null = null;
-let closeFiltersBtn: HTMLButtonElement | null = null;
+let closeFiltersBtn: HTMLElement | null = null;
 let filtersOverlay: HTMLElement | null = null;
 
-const CATEGORIES = ['Women', 'Men', 'Dresses', 'Tops', 'Shoes', 'Bags', 'Accessories'];
-
 export function initSearchFilters(): void {
-  searchInput = document.querySelector('#search-input');
-  categoryFilters = document.querySelector('#category-filters');
-  priceMinInput = document.querySelector('#price-min');
-  priceMaxInput = document.querySelector('#price-max');
-  sortSelect = document.querySelector('#sort-by');
-  clearFiltersBtn = document.querySelector('#clear-filters');
-  resultsCount = document.querySelector('#results-count');
-  filtersToggle = document.querySelector('#filters-toggle');
-  filtersPanel = document.querySelector('#filters-panel');
-  closeFiltersBtn = document.querySelector('#close-filters');
-  filtersOverlay = document.querySelector('#filters-overlay');
+  searchInput = document.querySelector<HTMLInputElement>('#search-input');
+  categoryFilters = document.querySelector<HTMLFieldSetElement>('#category-filters');
+  priceMinInput = document.querySelector<HTMLInputElement>('#price-min');
+  priceMaxInput = document.querySelector<HTMLInputElement>('#price-max');
+  inStockInput = document.querySelector<HTMLInputElement>('#in-stock');
+  onSaleInput = document.querySelector<HTMLInputElement>('#on-sale');
+  sortSelect = document.querySelector<HTMLSelectElement>('#sort-by');
+  clearFiltersBtn = document.querySelector<HTMLButtonElement>('#clear-filters');
+  resultsCount = document.querySelector<HTMLElement>('#results-count');
+  filtersToggle = document.querySelector<HTMLButtonElement>('#filters-toggle');
+  filtersPanel = document.querySelector<HTMLElement>('#filters-panel');
+  closeFiltersBtn = document.querySelector<HTMLElement>('#close-filters');
+  filtersOverlay = document.querySelector<HTMLElement>('#filters-overlay');
 
-  if (!searchInput && !categoryFilters && !sortSelect) return;
+  const hasControls = searchInput || categoryFilters || sortSelect || priceMinInput;
+  if (!hasControls) return;
 
-  // Create overlay if it doesn't exist
-  if (!filtersOverlay) {
+  if (!filtersOverlay && filtersPanel) {
     filtersOverlay = document.createElement('div');
     filtersOverlay.id = 'filters-overlay';
     filtersOverlay.className = 'filters-overlay';
     document.body.appendChild(filtersOverlay);
   }
 
-  // Read initial search query from URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const initialQuery = urlParams.get('q');
-  if (initialQuery) {
-    setFilters({ query: initialQuery });
-  }
-
+  applyUrlParams();
   renderCategoryCheckboxes();
   bindEvents();
   subscribeFilters(onFiltersChange);
   updateUIFromFilters(getFilters());
+  updateResultsCount(getFilteredProducts().length);
+}
+
+/** Supports `shop.html?q=linen` and `shop.html?category=Bags`. */
+function applyUrlParams(): void {
+  const urlParams = new URLSearchParams(window.location.search);
+  const patch: Partial<FilterState> = {};
+
+  const query = urlParams.get('q');
+  if (query) patch.query = query;
+
+  const category = urlParams.get('category');
+  if (category) patch.categories = [category];
+
+  const sort = urlParams.get('sort');
+  if (sort && ['name', 'price-asc', 'price-desc', 'newest'].includes(sort)) {
+    patch.sortBy = sort as FilterState['sortBy'];
+  }
+
+  if (Object.keys(patch).length > 0) setFilters(patch);
 }
 
 function renderCategoryCheckboxes(): void {
   if (!categoryFilters) return;
+
+  const categories = getAvailableCategories();
+
   categoryFilters.innerHTML = `
     <legend>Categories</legend>
-    ${CATEGORIES.map(
-      cat => `
+    ${
+      categories.length
+        ? categories
+            .map(
+              (c) => `
       <label class="filter-option">
-        <input type="checkbox" value="${cat}" />
-        <span>${cat}</span>
-      </label>
-    `
-    ).join('')}
+        <input type="checkbox" value="${escapeAttr(c.name)}" />
+        <span>${escapeHtml(c.name)}</span>
+        <span class="filter-count">${escapeHtml(c.count)}</span>
+      </label>`
+            )
+            .join('')
+        : '<p class="filter-empty">No categories available yet.</p>'
+    }
   `;
 }
 
@@ -76,30 +105,44 @@ function bindEvents(): void {
   searchInput?.addEventListener(
     'input',
     debounce(() => {
-      setFilters({ query: searchInput?.value || '' });
+      setFilters({ query: searchInput?.value ?? '' });
     }, 300)
   );
 
-  categoryFilters?.addEventListener('change', e => {
+  categoryFilters?.addEventListener('change', (e) => {
     const target = e.target as HTMLInputElement;
-    if (target.type === 'checkbox') {
-      const current = getFilters();
-      const categories = target.checked
+    if (target.type !== 'checkbox') return;
+
+    const current = getFilters();
+    setFilters({
+      categories: target.checked
         ? [...current.categories, target.value]
-        : current.categories.filter(c => c !== target.value);
-      setFilters({ categories });
-    }
+        : current.categories.filter((c) => c !== target.value),
+    });
   });
 
   priceMinInput?.addEventListener('change', () => {
-    setFilters({ priceRange: [Number(priceMinInput?.value || 0), getFilters().priceRange[1]] });
+    setFilters({
+      priceRange: [clampPrice(priceMinInput?.value), getFilters().priceRange[1]],
+    });
   });
+
   priceMaxInput?.addEventListener('change', () => {
-    setFilters({ priceRange: [getFilters().priceRange[0], Number(priceMaxInput?.value || 1000)] });
+    setFilters({
+      priceRange: [getFilters().priceRange[0], clampPrice(priceMaxInput?.value, PRICE_BOUNDS[1])],
+    });
+  });
+
+  inStockInput?.addEventListener('change', () => {
+    setFilters({ inStock: Boolean(inStockInput?.checked) });
+  });
+
+  onSaleInput?.addEventListener('change', () => {
+    setFilters({ onSale: Boolean(onSaleInput?.checked) });
   });
 
   sortSelect?.addEventListener('change', () => {
-    setFilters({ sortBy: sortSelect?.value as FilterState['sortBy'] });
+    setFilters({ sortBy: (sortSelect?.value ?? 'name') as FilterState['sortBy'] });
   });
 
   clearFiltersBtn?.addEventListener('click', () => {
@@ -107,66 +150,78 @@ function bindEvents(): void {
     updateUIFromFilters(getFilters());
   });
 
-  // Mobile filters panel toggle
+  // The "no results" state renders its own clear button.
+  document.addEventListener('fashionhub:clear-filters', () => {
+    resetFilters();
+    updateUIFromFilters(getFilters());
+  });
+
   filtersToggle?.addEventListener('click', openFiltersPanel);
   closeFiltersBtn?.addEventListener('click', closeFiltersPanel);
   filtersOverlay?.addEventListener('click', closeFiltersPanel);
 
-  // Close on Escape
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && filtersPanel?.classList.contains('active')) {
-      closeFiltersPanel();
-    }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && filtersPanel?.classList.contains('active')) closeFiltersPanel();
   });
+}
+
+function clampPrice(value: string | undefined, fallback = PRICE_BOUNDS[0]): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, PRICE_BOUNDS[0]), PRICE_BOUNDS[1]);
 }
 
 function openFiltersPanel(): void {
   filtersPanel?.classList.add('active');
   filtersOverlay?.classList.add('active');
+  filtersToggle?.setAttribute('aria-expanded', 'true');
   document.body.style.overflow = 'hidden';
 }
 
 function closeFiltersPanel(): void {
   filtersPanel?.classList.remove('active');
   filtersOverlay?.classList.remove('active');
+  filtersToggle?.setAttribute('aria-expanded', 'false');
   document.body.style.overflow = '';
 }
 
+/**
+ * Only the results count lives here — `features/products/render.ts` subscribes
+ * to the same store and re-renders the grid itself.
+ */
 function onFiltersChange(_filters: FilterState, results: Product[]): void {
   updateResultsCount(results.length);
-  renderProductGrid('.product-grid');
 }
 
 function updateUIFromFilters(filters: FilterState): void {
   if (searchInput) searchInput.value = filters.query;
   if (priceMinInput) priceMinInput.value = String(filters.priceRange[0]);
   if (priceMaxInput) priceMaxInput.value = String(filters.priceRange[1]);
+  if (inStockInput) inStockInput.checked = filters.inStock;
+  if (onSaleInput) onSaleInput.checked = filters.onSale;
   if (sortSelect) sortSelect.value = filters.sortBy;
-  categoryFilters?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach(cb => {
+
+  categoryFilters?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((cb) => {
     cb.checked = filters.categories.includes(cb.value);
   });
 }
 
 function updateResultsCount(count: number): void {
-  if (resultsCount) resultsCount.textContent = `${count} product${count !== 1 ? 's' : ''} found`;
+  if (resultsCount) {
+    resultsCount.textContent = `${count} product${count === 1 ? '' : 's'} found`;
+  }
 }
 
-function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {
-  let timeoutId: ReturnType<typeof setTimeout>;
-  return ((...args: unknown[]) => {
-    clearTimeout(timeoutId);
+function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number): (...args: A) => void {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  return (...args: A) => {
+    if (timeoutId) clearTimeout(timeoutId);
     timeoutId = setTimeout(() => fn(...args), ms);
-  }) as T;
+  };
 }
 
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  oldPrice?: number;
-  image: string;
-  description: string;
-  features: string[];
-  rating: string;
-  reviews: string;
+/** Re-render the category list once the catalogue has loaded from the API. */
+export function refreshCategories(): void {
+  renderCategoryCheckboxes();
+  updateUIFromFilters(getFilters());
 }

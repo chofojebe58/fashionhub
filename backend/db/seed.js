@@ -1,11 +1,13 @@
-import Database from 'better-sqlite3';
-import { resolve } from 'path';
-import { fileURLToPath } from 'url';
+/**
+ * Seeds the catalogue: 5 products + 40 size/colour variants.
+ *
+ * Safe to re-run: products are upserted and variants are inserted only if the
+ * SKU is new. Run `npm run db:migrate` first.
+ */
+import { db } from '../db.js';
 
-const __dirname = resolve(fileURLToPath(import.meta.url), '..');
-const dbPath = resolve(__dirname, '..', 'fashionhub.db');
-
-const db = new Database(dbPath);
+const IMG = (id) =>
+  `https://images.unsplash.com/${id}?auto=format&fit=crop&w=900&q=80`;
 
 const products = [
   {
@@ -13,74 +15,142 @@ const products = [
     name: 'Linen Blend Blazer',
     price: 89.99,
     old_price: 129.99,
-    image: 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80',
-    description: 'A tailored, lightweight essential designed to bring structure and softness to your everyday wardrobe.',
-    features: JSON.stringify(['Premium linen blend texture', 'Relaxed tailored fit', 'Made for layering all season']),
+    image: IMG('photo-1529139574466-a303027c1d8b'),
+    description:
+      'A tailored, lightweight essential designed to bring structure and softness to your everyday wardrobe.',
+    features: [
+      'Premium linen blend texture',
+      'Relaxed tailored fit',
+      'Made for layering all season',
+    ],
     rating: '★★★★★',
     reviews: '(124 reviews)',
     category: 'Women',
-    stock: 50
+    stock: 50,
+    featured: 1,
+    created_at: '2026-01-12 09:00:00',
   },
   {
     id: 'ribbed-knit-top',
     name: 'Ribbed Knit Top',
     price: 25.99,
-    old_price: 49.00,
-    image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80',
-    description: 'Soft-touch knitwear with a flattering silhouette that layers beautifully from work to weekend.',
-    features: JSON.stringify(['Breathable cotton blend', 'Stretch comfort fit', 'Elevated everyday staple']),
+    old_price: 49.0,
+    image: IMG('photo-1483985988355-763728e1935b'),
+    description:
+      'Soft-touch knitwear with a flattering silhouette that layers beautifully from work to weekend.',
+    features: ['Breathable cotton blend', 'Stretch comfort fit', 'Elevated everyday staple'],
     rating: '★★★★★',
     reviews: '(98 reviews)',
-    category: 'Women',
-    stock: 100
+    category: 'Tops',
+    stock: 100,
+    featured: 1,
+    created_at: '2026-02-03 09:00:00',
   },
   {
     id: 'wide-leg-trousers',
     name: 'Wide Leg Trousers',
     price: 59.99,
     old_price: 85.99,
-    image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80',
-    description: 'Crafted to create a fluid silhouette with a polished finish that moves effortlessly through the day.',
-    features: JSON.stringify(['Soft drape fabric', 'Comfortable high-rise waist', 'Day-to-evening versatility']),
+    image: IMG('photo-1524504388940-b1c1722653e1'),
+    description:
+      'Crafted to create a fluid silhouette with a polished finish that moves effortlessly through the day.',
+    features: ['Soft drape fabric', 'Comfortable high-rise waist', 'Day-to-evening versatility'],
     rating: '★★★★★',
     reviews: '(181 reviews)',
     category: 'Women',
-    stock: 75
+    stock: 75,
+    featured: 1,
+    created_at: '2026-03-18 09:00:00',
   },
   {
     id: 'leather-shoulder-bag',
     name: 'Leather Shoulder Bag',
     price: 79.99,
-    old_price: 110.00,
-    image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=900&
-    
-    
-    =80',
-    description: 'A refined everyday companion with structured lines, room for essentials, and timeless appeal.',
-    features: JSON.stringify(['Full-grain leather finish', 'Spacious interior', 'Adjustable strap comfort']),
+    old_price: 110.0,
+    image: IMG('photo-1584917865442-de89df76afd3'),
+    description:
+      'A refined everyday companion with structured lines, room for essentials, and timeless appeal.',
+    features: ['Full-grain leather finish', 'Spacious interior', 'Adjustable strap comfort'],
     rating: '★★★★★',
     reviews: '(112 reviews)',
     category: 'Bags',
-    stock: 30
+    stock: 30,
+    featured: 0,
+    created_at: '2026-04-27 09:00:00',
   },
   {
     id: 'minimalist-strappy-heels',
     name: 'Minimalist Strappy Heels',
     price: 49.99,
-    old_price: 79.00,
-    image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=900&q=80',
-    description: 'A sleek statement heel with a refined profile that elevates evening wear and special occasions alike.',
-    features: JSON.stringify(['Comfort cushioned insole', 'Lightweight design', 'Elegant evening-ready finish']),
+    old_price: 79.0,
+    image: IMG('photo-1517841905240-472988babdf9'),
+    description:
+      'A sleek statement heel with a refined profile that elevates evening wear and special occasions alike.',
+    features: ['Comfort cushioned insole', 'Lightweight design', 'Elegant evening-ready finish'],
     rating: '★★★★★',
     reviews: '(164 reviews)',
     category: 'Shoes',
-    stock: 40
-  }
+    stock: 40,
+    featured: 0,
+    created_at: '2026-05-09 09:00:00',
+  },
 ];
 
+const sizes = {
+  apparel: ['XS', 'S', 'M', 'L', 'XL'],
+  waist: ['24', '26', '28', '30', '32'],
+  euShoe: ['36', '37', '38', '39', '40'],
+  one: ['One Size'],
+};
+
+/** [productId, sizeSet, colours, prefix, stockBySize] */
+const variantSpecs = [
+  ['linen-blend-blazer', sizes.apparel, ['Beige', 'Black'], 'LBB', { XS: 5, S: 10, M: 15, L: 10, XL: 5 }],
+  ['ribbed-knit-top', sizes.apparel.slice(0, 4), ['Cream', 'Black'], 'RKT', { XS: 20, S: 25, M: 30, L: 15 }],
+  ['wide-leg-trousers', sizes.waist, ['Charcoal', 'Navy'], 'WLT', { 24: 8, 26: 12, 28: 15, 30: 12, 32: 8 }],
+  ['leather-shoulder-bag', sizes.one, ['Tan', 'Black'], 'LSB', { 'One Size': 15 }],
+  ['minimalist-strappy-heels', sizes.euShoe, ['Black', 'Nude'], 'MSH', { 36: 5, 37: 8, 38: 10, 39: 8, 40: 5 }],
+];
+
+const colourCode = {
+  Beige: 'BEI', Black: 'BLK', Cream: 'CRM', Charcoal: 'CHA', Navy: 'NAV',
+  Tan: 'TAN', Nude: 'NUD',
+};
+
+const sizeCode = (size) =>
+  size === 'One Size' ? 'OS' : /^\d+$/.test(size) ? size : size;
+
+const variants = variantSpecs.flatMap(([productId, sizeList, colours, prefix, stockBySize]) =>
+  colours.flatMap((color) =>
+    sizeList.map((size) => ({
+      product_id: productId,
+      size,
+      color,
+      sku: `${prefix}-${colourCode[color] || color.slice(0, 3).toUpperCase()}-${sizeCode(size)}`,
+      stock: stockBySize[size] ?? 0,
+    }))
+  )
+);
+
 const insertProduct = db.prepare(`
-  INSERT OR REPLACE INTO products (id, name, price, old_price, image, description, features, rating, reviews, category, stock)
-  VALUES (@id, @name, @price, @old_price, @image, @description, @features, @rating, @reviews, @category, @stock)
+  INSERT INTO products
+    (id, name, price, old_price, image, description, features, rating, reviews,
+     category, stock, created_at, published, featured, gallery)
+  VALUES
+    (@id, @name, @price, @old_price, @image, @description, @features, @rating, @reviews,
+     @category, @stock, @created_at, 1, @featured, '[]')
+  ON CONFLICT(id) DO UPDATE SET
+    name        = excluded.name,
+    price       = excluded.price,
+    old_price   = excluded.old_price,
+    image       = excluded.image,
+    description = excluded.description,
+    features    = excluded.features,
+    rating      = excluded.rating,
+    reviews     = excluded.reviews,
+    category    = excluded.category,
+    stock       = excluded.stock,
+    updated_at  = CURRENT_TIMESTAMP
 `);
 
 const insertVariant = db.prepare(`
@@ -88,67 +158,21 @@ const insertVariant = db.prepare(`
   VALUES (@product_id, @size, @color, @sku, @stock)
 `);
 
-const variants = [
-  // Linen Blend Blazer variants
-  { product_id: 'linen-blend-blazer', size: 'XS', color: 'Beige', sku: 'LBB-BEI-XS', stock: 5 },
-  { product_id: 'linen-blend-blazer', size: 'S', color: 'Beige', sku: 'LBB-BEI-S', stock: 10 },
-  { product_id: 'linen-blend-blazer', size: 'M', color: 'Beige', sku: 'LBB-BEI-M', stock: 15 },
-  { product_id: 'linen-blend-blazer', size: 'L', color: 'Beige', sku: 'LBB-BEI-L', stock: 10 },
-  { product_id: 'linen-blend-blazer', size: 'XL', color: 'Beige', sku: 'LBB-BEI-XL', stock: 5 },
-  { product_id: 'linen-blend-blazer', size: 'XS', color: 'Black', sku: 'LBB-BLK-XS', stock: 5 },
-  { product_id: 'linen-blend-blazer', size: 'S', color: 'Black', sku: 'LBB-BLK-S', stock: 10 },
-  { product_id: 'linen-blend-blazer', size: 'M', color: 'Black', sku: 'LBB-BLK-M', stock: 15 },
-  { product_id: 'linen-blend-blazer', size: 'L', color: 'Black', sku: 'LBB-BLK-L', stock: 10 },
-  { product_id: 'linen-blend-blazer', size: 'XL', color: 'Black', sku: 'LBB-BLK-XL', stock: 5 },
-
-  // Ribbed Knit Top variants
-  { product_id: 'ribbed-knit-top', size: 'XS', color: 'Cream', sku: 'RKT-CRM-XS', stock: 20 },
-  { product_id: 'ribbed-knit-top', size: 'S', color: 'Cream', sku: 'RKT-CRM-S', stock: 25 },
-  { product_id: 'ribbed-knit-top', size: 'M', color: 'Cream', sku: 'RKT-CRM-M', stock: 30 },
-  { product_id: 'ribbed-knit-top', size: 'L', color: 'Cream', sku: 'RKT-CRM-L', stock: 15 },
-  { product_id: 'ribbed-knit-top', size: 'XS', color: 'Black', sku: 'RKT-BLK-XS', stock: 10 },
-  { product_id: 'ribbed-knit-top', size: 'S', color: 'Black', sku: 'RKT-BLK-S', stock: 15 },
-  { product_id: 'ribbed-knit-top', size: 'M', color: 'Black', sku: 'RKT-BLK-M', stock: 20 },
-  { product_id: 'ribbed-knit-top', size: 'L', color: 'Black', sku: 'RKT-BLK-L', stock: 10 },
-
-  // Wide Leg Trousers variants
-  { product_id: 'wide-leg-trousers', size: '24', color: 'Charcoal', sku: 'WLT-CHA-24', stock: 8 },
-  { product_id: 'wide-leg-trousers', size: '26', color: 'Charcoal', sku: 'WLT-CHA-26', stock: 12 },
-  { product_id: 'wide-leg-trousers', size: '28', color: 'Charcoal', sku: 'WLT-CHA-28', stock: 15 },
-  { product_id: 'wide-leg-trousers', size: '30', color: 'Charcoal', sku: 'WLT-CHA-30', stock: 12 },
-  { product_id: 'wide-leg-trousers', size: '32', color: 'Charcoal', sku: 'WLT-CHA-32', stock: 8 },
-  { product_id: 'wide-leg-trousers', size: '24', color: 'Navy', sku: 'WLT-NAV-24', stock: 5 },
-  { product_id: 'wide-leg-trousers', size: '26', color: 'Navy', sku: 'WLT-NAV-26', stock: 10 },
-  { product_id: 'wide-leg-trousers', size: '28', color: 'Navy', sku: 'WLT-NAV-28', stock: 12 },
-  { product_id: 'wide-leg-trousers', size: '30', color: 'Navy', sku: 'WLT-NAV-30', stock: 10 },
-  { product_id: 'wide-leg-trousers', size: '32', color: 'Navy', sku: 'WLT-NAV-32', stock: 5 },
-
-  // Leather Shoulder Bag variants
-  { product_id: 'leather-shoulder-bag', size: 'One Size', color: 'Tan', sku: 'LSB-TAN-OS', stock: 15 },
-  { product_id: 'leather-shoulder-bag', size: 'One Size', color: 'Black', sku: 'LSB-BLK-OS', stock: 15 },
-
-  // Minimalist Strappy Heels variants
-  { product_id: 'minimalist-strappy-heels', size: '36', color: 'Black', sku: 'MSH-BLK-36', stock: 5 },
-  { product_id: 'minimalist-strappy-heels', size: '37', color: 'Black', sku: 'MSH-BLK-37', stock: 8 },
-  { product_id: 'minimalist-strappy-heels', size: '38', color: 'Black', sku: 'MSH-BLK-38', stock: 10 },
-  { product_id: 'minimalist-strappy-heels', size: '39', color: 'Black', sku: 'MSH-BLK-39', stock: 8 },
-  { product_id: 'minimalist-strappy-heels', size: '40', color: 'Black', sku: 'MSH-BLK-40', stock: 5 },
-  { product_id: 'minimalist-strappy-heels', size: '36', color: 'Nude', sku: 'MSH-NUD-36', stock: 5 },
-  { product_id: 'minimalist-strappy-heels', size: '37', color: 'Nude', sku: 'MSH-NUD-37', stock: 8 },
-  { product_id: 'minimalist-strappy-heels', size: '38', color: 'Nude', sku: 'MSH-NUD-38', stock: 10 },
-  { product_id: 'minimalist-strappy-heels', size: '39', color: 'Nude', sku: 'MSH-NUD-39', stock: 8 },
-  { product_id: 'minimalist-strappy-heels', size: '40', color: 'Nude', sku: 'MSH-NUD-40', stock: 5 },
-];
-
-const transaction = db.transaction(() => {
+const seed = db.transaction(() => {
   for (const product of products) {
-    insertProduct.run(product);
+    insertProduct.run({
+      ...product,
+      features: JSON.stringify(product.features),
+      featured: product.featured ?? 0,
+    });
   }
   for (const variant of variants) {
     insertVariant.run(variant);
   }
 });
 
-transaction();
-console.log('Database seeded with', products.length, 'products and', variants.length, 'variants');
-db.close();
+seed();
+
+console.log(
+  `✓ Seeded ${products.length} products and ${variants.length} variants into ${db.name}`
+);

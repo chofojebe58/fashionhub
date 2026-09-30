@@ -1,12 +1,14 @@
 import {
-  getCartCount,
-  getCartTotal,
   getCart,
-  updateQuantity,
+  getCartCount,
+  getTotals,
+  isOfflineCart,
   removeFromCart,
   subscribe,
+  updateQuantity,
 } from './state.ts';
 import { formatCurrency } from '@utils/format.ts';
+import { escapeAttr, escapeHtml, formatList, safeUrl } from '@utils/escape.ts';
 import type { CartItem } from '@app-types/cart.ts';
 
 let cartPanel: HTMLElement | null = null;
@@ -16,39 +18,44 @@ let cartCountEl: HTMLElement | null = null;
 let cartTotalEl: HTMLElement | null = null;
 let cartItemsList: HTMLElement | null = null;
 let releaseFocusTrap: (() => void) | null = null;
+let lastFocusedElement: HTMLElement | null = null;
 
-const focusableSelector = 'a[href], button:not([disabled]), input, [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function isOpen(): boolean {
+  return Boolean(cartPanel?.classList.contains('open'));
+}
 
 export function initCartUI(): void {
-  cartPanel = document.querySelector('.cart-panel');
-  cartToggle = document.querySelector('.cart-toggle');
-  closeCartButton = document.querySelector('.close-cart');
-  cartCountEl = document.querySelector('.cart-count');
-  cartTotalEl = document.querySelector('.cart-total');
-  cartItemsList = document.querySelector('.cart-items');
+  cartPanel = document.querySelector<HTMLElement>('.cart-panel');
+  cartToggle = document.querySelector<HTMLElement>('.cart-toggle');
+  closeCartButton = document.querySelector<HTMLElement>('.close-cart');
+  cartCountEl = document.querySelector<HTMLElement>('.cart-count');
+  cartTotalEl = document.querySelector<HTMLElement>('.cart-total');
+  cartItemsList = document.querySelector<HTMLElement>('.cart-items');
 
   if (!cartPanel || !cartToggle) return;
 
   cartToggle.addEventListener('click', toggleCart);
-  closeCartButton?.addEventListener('click', closeCart);
+  closeCartButton?.addEventListener('click', () => closeCart());
 
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && cartPanel?.classList.contains('open')) {
-      closeCart();
-    }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isOpen()) closeCart();
   });
 
-  document.addEventListener('click', event => {
-    const clickedCartToggle =
-      event.target instanceof Element ? event.target.closest('.cart-toggle') : null;
-    const clickedCartPanel =
-      event.target instanceof Element ? event.target.closest('.cart-panel') : null;
-    if (!clickedCartToggle && !clickedCartPanel && cartPanel) {
-      closeCart();
-    }
+  // Clicking outside closes the drawer — but only when it is actually open,
+  // and without stealing focus from whatever the user clicked.
+  document.addEventListener('click', (event) => {
+    if (!isOpen()) return;
+
+    const target = event.target as Element | null;
+    if (target?.closest('.cart-panel') || target?.closest('.cart-toggle')) return;
+
+    closeCart({ restoreFocus: false });
   });
 
-  document.querySelectorAll('.checkout-btn').forEach(btn => {
+  document.querySelectorAll<HTMLElement>('.checkout-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       window.location.href = 'checkout.html';
     });
@@ -59,95 +66,126 @@ export function initCartUI(): void {
 }
 
 function toggleCart(): void {
-  if (cartPanel?.classList.contains('open')) {
-    closeCart();
-  } else {
-    openCart();
-  }
+  if (isOpen()) closeCart();
+  else openCart();
 }
 
 export function openCart(): void {
-  cartPanel?.classList.add('open');
+  if (!cartPanel || isOpen()) return;
+
+  lastFocusedElement = document.activeElement as HTMLElement | null;
+
+  cartPanel.classList.add('open');
+  cartPanel.setAttribute('aria-hidden', 'false');
   cartToggle?.setAttribute('aria-expanded', 'true');
-  cartPanel?.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('cart-open');
+
   closeCartButton?.focus();
   enableFocusTrap();
 }
 
-export function closeCart(): void {
-  cartPanel?.classList.remove('open');
+export function closeCart(options: { restoreFocus?: boolean } = {}): void {
+  const { restoreFocus = true } = options;
+  if (!cartPanel || !isOpen()) return;
+
+  cartPanel.classList.remove('open');
+  cartPanel.setAttribute('aria-hidden', 'true');
   cartToggle?.setAttribute('aria-expanded', 'false');
-  cartPanel?.setAttribute('aria-hidden', 'true');
-  cartToggle?.focus();
+  document.body.classList.remove('cart-open');
+
   disableFocusTrap();
+
+  if (restoreFocus) {
+    (lastFocusedElement ?? cartToggle)?.focus();
+  }
+  lastFocusedElement = null;
+}
+
+function cartRow(item: CartItem): string {
+  const name = escapeAttr(item.name);
+  const variant = formatList([item.size, item.color]);
+
+  return `
+    <li class="cart-item" data-id="${escapeAttr(item.id)}">
+      <img src="${safeUrl(item.image, '')}" alt="${name}" loading="lazy" decoding="async" />
+      <div class="cart-item-content">
+        <strong>${escapeHtml(item.name)}</strong>
+        ${variant ? `<span class="cart-item-variant">${escapeHtml(variant)}</span>` : ''}
+        <span class="cart-item-price">${formatCurrency(item.price)} each</span>
+        <div class="cart-item-actions">
+          <div class="qty-control" role="group" aria-label="Quantity controls for ${name}">
+            <button class="qty-btn qty-decrease" type="button" data-id="${escapeAttr(item.id)}"
+              aria-label="Decrease quantity for ${name}">&minus;</button>
+            <span class="qty-value" aria-live="polite">${escapeHtml(item.quantity)}</span>
+            <button class="qty-btn qty-increase" type="button" data-id="${escapeAttr(item.id)}"
+              aria-label="Increase quantity for ${name}">+</button>
+          </div>
+          <button class="remove-item" type="button" data-id="${escapeAttr(item.id)}"
+            aria-label="Remove ${name} from cart">Remove</button>
+        </div>
+      </div>
+    </li>
+  `;
 }
 
 export function renderCartUI(): void {
   const cart = getCart();
-  const totalItems = getCartCount();
-  const totalPrice = getCartTotal();
+  const { subtotal, freeShippingThreshold } = getTotals();
 
-  if (cartCountEl) cartCountEl.textContent = String(totalItems);
-  if (cartTotalEl) cartTotalEl.textContent = formatCurrency(totalPrice);
+  if (cartCountEl) {
+    const count = getCartCount();
+    cartCountEl.textContent = String(count);
+    cartCountEl.setAttribute('aria-label', `${count} item${count === 1 ? '' : 's'} in cart`);
+    cartToggle?.setAttribute('aria-label', `Open cart, ${count} item${count === 1 ? '' : 's'}`);
+  }
+
+  if (cartTotalEl) cartTotalEl.textContent = formatCurrency(subtotal);
 
   if (!cartItemsList) return;
 
+  const offlineNote = isOfflineCart()
+    ? '<li class="cart-notice">You appear to be offline — this cart is saved on this device only.</li>'
+    : '';
+
   if (!cart.length) {
-    cartItemsList.innerHTML = '<li class="empty-cart">Your cart is empty.</li>';
+    cartItemsList.innerHTML = `${offlineNote}<li class="empty-cart">Your cart is empty.</li>`;
     return;
   }
 
-  cartItemsList.innerHTML = cart
-    .map(
-      (item: CartItem) => `
-    <li class="cart-item" data-id="${item.id}">
-      <img src="${item.image}" alt="${item.name}" />
-      <div class="cart-item-content">
-        <strong>${item.name}</strong>
-        ${item.size || item.color ? `<span>${[item.size, item.color].filter(Boolean).join(' / ')}</span>` : ''}
-        <span>${formatCurrency(item.price)} each</span>
-        <div class="cart-item-actions">
-          <div class="qty-control" aria-label="Quantity controls for ${item.name}">
-            <button class="qty-btn qty-decrease" type="button" data-id="${item.id}" aria-label="Decrease quantity for ${item.name}">−</button>
-            <span class="qty-value">${item.quantity}</span>
-            <button class="qty-btn qty-increase" type="button" data-id="${item.id}" aria-label="Increase quantity for ${item.name}">+</button>
-          </div>
-          <button class="remove-item" type="button" data-id="${item.id}" aria-label="Remove ${item.name}">Remove</button>
-        </div>
-      </div>
-    </li>
-  `
-    )
-    .join('');
+  const remaining = freeShippingThreshold - subtotal;
+  const shippingNote =
+    remaining > 0
+      ? `<li class="cart-notice">Add ${formatCurrency(remaining)} more for free shipping.</li>`
+      : '<li class="cart-notice success">You’ve unlocked free shipping.</li>';
+
+  cartItemsList.innerHTML = offlineNote + shippingNote + cart.map(cartRow).join('');
 
   bindCartActions();
 }
 
 function bindCartActions(): void {
-  cartItemsList?.querySelectorAll('.qty-btn').forEach(button => {
+  cartItemsList?.querySelectorAll<HTMLButtonElement>('.qty-btn').forEach((button) => {
     button.addEventListener('click', () => {
-      const id = Number((button as HTMLElement).dataset.id);
-      const item = getCart().find(i => i.id === id);
-      if (!item) return;
-      if (button.classList.contains('qty-increase')) {
-        updateQuantity(id, 1);
-      } else if (button.classList.contains('qty-decrease')) {
-        updateQuantity(id, -1);
-      }
+      const id = Number(button.dataset.id);
+      if (!Number.isFinite(id)) return;
+      const delta = button.classList.contains('qty-increase') ? 1 : -1;
+      void updateQuantity(id, delta).catch((error) => console.error('Quantity update failed:', error));
     });
   });
 
-  cartItemsList?.querySelectorAll('.remove-item').forEach(button => {
+  cartItemsList?.querySelectorAll<HTMLButtonElement>('.remove-item').forEach((button) => {
     button.addEventListener('click', () => {
-      const id = Number((button as HTMLElement).dataset.id);
-      removeFromCart(id);
+      const id = Number(button.dataset.id);
+      if (!Number.isFinite(id)) return;
+      void removeFromCart(id).catch((error) => console.error('Remove failed:', error));
     });
   });
 }
 
 function trapFocusIn(container: HTMLElement): () => void {
-  const focusable = Array.from(container.querySelectorAll<HTMLElement>(focusableSelector));
+  const focusable = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE));
   if (!focusable.length) return () => {};
+
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
 
@@ -168,7 +206,7 @@ function trapFocusIn(container: HTMLElement): () => void {
 
 function enableFocusTrap(): void {
   if (!cartPanel) return;
-  releaseFocusTrap = trapFocusIn(cartPanel) || null;
+  releaseFocusTrap = trapFocusIn(cartPanel);
 }
 
 function disableFocusTrap(): void {

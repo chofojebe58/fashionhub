@@ -1,8 +1,14 @@
+import { api } from '@api/client.ts';
 import { loadProducts, saveProducts } from '@utils/storage.ts';
-import type { Product } from '@app-types/cart.ts';
+import { mapApiProduct, type ApiProduct, type Product } from '@app-types/product.ts';
 
-const DEFAULT_PRODUCTS: Record<string, Product> = {
-  'linen-blend-blazer': {
+/**
+ * Offline safety net. The shop renders from `GET /api/products`; these five are
+ * only used when the API is unreachable AND there is no cached copy yet.
+ * Keep in sync with backend/db/seed.js.
+ */
+const DEFAULT_PRODUCTS: Product[] = [
+  {
     id: 'linen-blend-blazer',
     name: 'Linen Blend Blazer',
     price: 89.99,
@@ -11,15 +17,14 @@ const DEFAULT_PRODUCTS: Record<string, Product> = {
       'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80',
     description:
       'A tailored, lightweight essential designed to bring structure and softness to your everyday wardrobe.',
-    features: [
-      'Premium linen blend texture',
-      'Relaxed tailored fit',
-      'Made for layering all season',
-    ],
+    features: ['Premium linen blend texture', 'Relaxed tailored fit', 'Made for layering all season'],
     rating: '★★★★★',
     reviews: '(124 reviews)',
+    category: 'Women',
+    stock: 50,
+    createdAt: '2026-01-12T09:00:00.000Z',
   },
-  'ribbed-knit-top': {
+  {
     id: 'ribbed-knit-top',
     name: 'Ribbed Knit Top',
     price: 25.99,
@@ -31,8 +36,11 @@ const DEFAULT_PRODUCTS: Record<string, Product> = {
     features: ['Breathable cotton blend', 'Stretch comfort fit', 'Elevated everyday staple'],
     rating: '★★★★★',
     reviews: '(98 reviews)',
+    category: 'Tops',
+    stock: 100,
+    createdAt: '2026-02-03T09:00:00.000Z',
   },
-  'wide-leg-trousers': {
+  {
     id: 'wide-leg-trousers',
     name: 'Wide Leg Trousers',
     price: 59.99,
@@ -44,21 +52,27 @@ const DEFAULT_PRODUCTS: Record<string, Product> = {
     features: ['Soft drape fabric', 'Comfortable high-rise waist', 'Day-to-evening versatility'],
     rating: '★★★★★',
     reviews: '(181 reviews)',
+    category: 'Women',
+    stock: 75,
+    createdAt: '2026-03-18T09:00:00.000Z',
   },
-  'leather-shoulder-bag': {
+  {
     id: 'leather-shoulder-bag',
     name: 'Leather Shoulder Bag',
     price: 79.99,
     oldPrice: 110.0,
     image:
-      'https://i.pinimg.com/1200x/d6/0a/0c/d60a0c218057be27adcdb52c72eaeb92.jpg',
+      'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=900&q=80',
     description:
       'A refined everyday companion with structured lines, room for essentials, and timeless appeal.',
     features: ['Full-grain leather finish', 'Spacious interior', 'Adjustable strap comfort'],
     rating: '★★★★★',
     reviews: '(112 reviews)',
+    category: 'Bags',
+    stock: 30,
+    createdAt: '2026-04-27T09:00:00.000Z',
   },
-  'minimalist-strappy-heels': {
+  {
     id: 'minimalist-strappy-heels',
     name: 'Minimalist Strappy Heels',
     price: 49.99,
@@ -70,41 +84,85 @@ const DEFAULT_PRODUCTS: Record<string, Product> = {
     features: ['Comfort cushioned insole', 'Lightweight design', 'Elegant evening-ready finish'],
     rating: '★★★★★',
     reviews: '(164 reviews)',
+    category: 'Shoes',
+    stock: 40,
+    createdAt: '2026-05-09T09:00:00.000Z',
   },
-};
+];
+
+export type CatalogSource = 'api' | 'cache' | 'defaults';
 
 let productCatalog: Record<string, Product> | null = null;
+let catalogSource: CatalogSource = 'defaults';
+let loadPromise: Promise<CatalogSource> | null = null;
+
+function toRecord(products: Product[]): Record<string, Product> {
+  return products.reduce<Record<string, Product>>((acc, p) => {
+    if (p?.id) acc[p.id] = p;
+    return acc;
+  }, {});
+}
+
+function defaultsRecord(): Record<string, Product> {
+  return toRecord(DEFAULT_PRODUCTS);
+}
 
 export function getProductCatalog(): Record<string, Product> {
   if (!productCatalog) {
-    productCatalog = loadProducts() || DEFAULT_PRODUCTS;
+    productCatalog = defaultsRecord();
   }
   return productCatalog;
 }
 
-export function getProduct(id: string): Product {
-  const catalog = getProductCatalog();
-  return catalog[id] || catalog['linen-blend-blazer'];
+export function getCatalogSource(): CatalogSource {
+  return catalogSource;
 }
 
-export function setProductCatalog(catalog: Record<string, Product>): void {
-  productCatalog = catalog;
-  saveProducts(catalog);
+export function getAllProducts(): Product[] {
+  return Object.values(getProductCatalog());
 }
 
-export function addProduct(product: Product): void {
-  const catalog = getProductCatalog();
-  catalog[product.id] = product;
-  saveProducts(catalog);
+export function getProduct(id: string): Product | undefined {
+  return getProductCatalog()[id];
 }
 
-export function deleteProduct(id: string): void {
-  const catalog = getProductCatalog();
-  delete catalog[id];
-  saveProducts(catalog);
+/**
+ * Loads the catalogue from the API, falling back to the last cached copy and
+ * finally to the built-in defaults. Idempotent — safe to call from every page.
+ */
+export function loadCatalog(): Promise<CatalogSource> {
+  if (loadPromise) return loadPromise;
+
+  loadPromise = (async () => {
+    try {
+      const products = (await api.products.list({ limit: 100 })) as ApiProduct[];
+      if (!Array.isArray(products) || products.length === 0) throw new Error('Empty catalogue');
+
+      productCatalog = toRecord(products.map(mapApiProduct));
+      catalogSource = 'api';
+      saveProducts(products.map(mapApiProduct));
+    } catch (err) {
+      console.warn('Product API unavailable, using cached catalogue:', err);
+      const cached = loadProducts();
+      if (cached && Object.keys(cached).length > 0) {
+        productCatalog = cached;
+        catalogSource = 'cache';
+      } else {
+        productCatalog = defaultsRecord();
+        catalogSource = 'defaults';
+      }
+    }
+    return catalogSource;
+  })();
+
+  return loadPromise;
 }
 
-export function resetToDefaults(): void {
-  productCatalog = DEFAULT_PRODUCTS;
-  saveProducts(DEFAULT_PRODUCTS);
+/** Test/admin hook: replace the in-memory catalogue. */
+export function setProductCatalog(products: Product[] | Record<string, Product>): void {
+  productCatalog = Array.isArray(products) ? toRecord(products) : products;
+  catalogSource = 'cache';
+  saveProducts(Object.values(productCatalog));
 }
+
+export { DEFAULT_PRODUCTS };

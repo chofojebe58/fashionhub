@@ -4,56 +4,40 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FashionHub | Order Confirmed</title>
-    <link rel="stylesheet" href="src/styles/main.css" />
+    <meta name="description" content="Your FashionHub order has been confirmed." />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/styles/main.css" />
   </head>
   <body>
     <div class="page-shell">
       <div class="container">
         <header class="topbar">
           <a class="brand" href="index.html">LUNORA</a>
+          <div class="account-slot" data-account-slot></div>
           <a href="shop.html" class="link-more">Continue shopping</a>
         </header>
 
         <main class="order-success">
-          <section class="success-panel">
-            <h1>Thank you — your order is confirmed</h1>
-            <p id="order-message">We have emailed your receipt and order details.</p>
+          <section class="success-panel" aria-live="polite">
+            <p class="eyebrow">Order confirmed</p>
+            <h1>Thank you — your order is on its way</h1>
+            <p id="order-message">Loading your order details…</p>
+
             <div class="order-details" id="order-details"></div>
-            <a class="btn btn-primary" href="index.html">Back to home</a>
+
+            <div class="success-actions">
+              <a class="btn btn-primary" href="shop.html">Continue shopping</a>
+              <a class="btn btn-light" href="index.html">Back to home</a>
+            </div>
           </section>
         </main>
       </div>
     </div>
 
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        const order = JSON.parse(sessionStorage.getItem('fashionhub-last-order') || 'null');
-        const details = document.getElementById('order-details');
-        const msg = document.getElementById('order-message');
-        if (!order) {
-          msg.textContent = 'No recent order found.';
-          details.innerHTML = '<p>Please check your email or return to the shop.</p>';
-          return;
-        }
-
-        msg.textContent = `Order ${order.id} placed on ${new Date(order.date).toLocaleString()}`;
-        if (!order.items || !order.items.length) {
-          details.innerHTML = '<p>Your order contains no items.</p>';
-          return;
-        }
-
-        details.innerHTML = `
-          <h3>Items</h3>
-          <ul class="order-list">
-            ${order.items.map(it => `<li><strong>${it.name}</strong> × ${it.quantity} — $${(it.price * it.quantity).toFixed(2)}</li>`).join('')}
-          </ul>
-          <h4>Total: $${order.items.reduce((s,it) => s + it.price * it.quantity, 0).toFixed(2)}</h4>
-          ${order.payment ? `<p>Paid with card ending in <strong>${order.payment.cardLast4}</strong></p>` : ''}
-        `;
-
-        // clear sessionStorage order after showing
-        // sessionStorage.removeItem('fashionhub-last-order');
-      });
-    </script>
+    <script type="module" src="/src/pages/order-success.ts"></script>
   </body>
 </html>
